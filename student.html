@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<body class="student-page"><div class="wrap">
+<div class="top"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">Student</span></div>
+<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice" hidden role="alert"></div>
+<div class="panel"><h2 id="name">My account</h2><p class="muted" id="info"></p></div>
+<div class="tabs" id="tabs"><button class="btn on" data-t="exams">Online exams</button><button class="btn" data-t="results">My exam results</button><button class="btn" data-t="modules">Modules</button><button class="btn" data-t="fees" id="feTab">Balance &amp; payments</button><button class="btn" data-t="rooms">My classrooms</button></div>
+<section data-s="exams"><div class="panel"><h2>Online exams</h2>
+<p class="muted fine">Exams your teachers opened for you. Answer on this page, then submit. You can submit each exam <b>once</b> and your score appears right away.</p>
+<div class="tablewrap"><table id="eTbl"></table></div></div></section>
+<section data-s="results" hidden><div class="panel"><div class="row"><label>Term / quarter<select id="rTerm"></select></label></div>
+<div class="tablewrap"><table id="rTbl"></table></div></div></section>
+<section data-s="modules" hidden><div class="panel"><div class="row"><label>Term / quarter<select id="mTerm"></select></label></div>
+<div class="tablewrap"><table id="mTbl"></table></div></div></section>
+<section data-s="fees" hidden><div class="panel"><h2>My balance and payments</h2>
+<p class="muted fine">Posted by the school's Finance office. If something looks wrong, ask the Finance office.</p><div id="feBox"></div></div></section>
+<section data-s="rooms" hidden><div class="panel"><h2>Join another teacher's classroom</h2>
+<p class="muted fine">Ask the teacher for the classroom code. After joining you see that teacher's exam results and modules. Your own section and other classrooms stay separate.</p>
+<div class="row"><label>Classroom code<input id="jCode" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="K7M2QX"></label><button class="btn primary" id="jGo">Join classroom</button></div></div>
+<div class="panel"><h2>My classrooms</h2><div class="tablewrap"><table id="cTbl"></table></div></div></section>
+
+<!-- exam room: shown instead of the tabs while a student answers -->
+<section id="room" class="panel" hidden>
+<div class="roomhead"><div><h2 id="rmTitle" style="margin:0"></h2><span class="muted fine" id="rmMeta"></span></div><span class="timer" id="rmTimer" hidden>00:00</span></div>
+<div id="rmInst" class="notice" hidden style="background:#f4f7ff;border-color:#a9b9e8;color:#1a1a1a"></div>
+<div class="split" id="rmSplit" data-view="paper">
+<div class="mobtabs"><button type="button" class="btn on" data-v="paper">Exam paper</button><button type="button" class="btn" data-v="sheet">Answer sheet</button></div>
+<div class="pane" id="rmPaperPane"><h3>Exam paper</h3><div id="rmPaper"></div></div>
+<div class="pane" id="rmSheetPane"><h3>Answer sheet</h3><div id="rmQs"></div></div>
+</div>
+<div class="row" style="margin-top:1rem"><button class="btn primary" id="rmSubmit">Submit answers</button><button class="btn" id="rmLeave">Save and leave</button><span class="muted" id="rmCount"></span></div>
+</section>
+<section id="done" class="panel" hidden><h2>Submitted</h2><div id="doneBody"></div><div class="row" style="margin-top:1rem"><button class="btn primary" id="doneBack">Back to my exams</button></div></section>
+</div>
+<script type="module" src="js/student.js"></script>
+<script src="js/mobile.js" defer></script></body></html>

@@ -1,0 +1,178 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<body class="auth-page">
+<script>
+/* If the module below cannot start (a js file is missing or an old copy), say so instead of silently reloading. */
+document.addEventListener("submit", function (e) {
+  if (window.__arkReady) return;
+  e.preventDefault();
+  var m = document.getElementById("msg");
+  m.textContent = "The page scripts did not load. Upload the whole js folder (auth.js, db.js, config.js, files.js, omr.js, admin.js, superadmin.js, teacher.js, student.js, password-toggle.js), then hard refresh with Ctrl+Shift+R.";
+  m.className = "notice err"; m.hidden = false;
+}, true);
+</script>
+<main class="auth-card">
+  <div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span>SylverVibe Code - Exam Portal</span></div>
+  <div id="msg" class="notice" hidden role="alert"></div>
+
+  <section id="signin">
+    <h1>Sign in</h1>
+    <div class="role-tabs" role="tablist" aria-label="Choose how you sign in">
+      <button type="button" role="tab" id="tabStudent" aria-controls="panelStudent" aria-selected="true">Student</button>
+      <button type="button" role="tab" id="tabStaff" aria-controls="panelStaff" aria-selected="false">Teacher / Registrar / Finance / IT Admin</button>
+    </div>
+
+    <!-- STUDENT LOGIN -->
+    <div id="panelStudent" role="tabpanel" aria-labelledby="tabStudent">
+      <p class="muted role-note">Sign in with your <b>Exam ID No.</b> (for example 2026-0001). No school code needed.</p>
+      <form id="fs" novalidate>
+        <label>Exam ID No.<input id="sid" autocomplete="username" autocapitalize="none" required></label>
+        <label>Password<input id="spw" type="password" autocomplete="current-password" required>
+          <small>First time: your birth year + the first letter of your last name (example 2012D).</small></label>
+        <button class="btn primary block" id="sgo">Sign in as Student</button>
+      </form>
+    </div>
+
+    <!-- TEACHER / IT ADMIN LOGIN -->
+    <div id="panelStaff" role="tabpanel" aria-labelledby="tabStaff" hidden>
+      <p class="muted role-note"><b>Teachers, Registrars and Finance:</b> school code + Employee No. <b>IT Admins:</b> your email (leave the school code blank).</p>
+      <form id="ft" novalidate>
+        <label>School code <small>Teachers, Registrars and Finance only. Leave blank if you are an IT Admin.</small>
+          <input id="school" autocomplete="organization" autocapitalize="characters"></label>
+        <label>Employee No. or email<input id="email" autocomplete="username" autocapitalize="none" required></label>
+        <label>Password<input id="pw" type="password" autocomplete="current-password" required>
+          <small>First time (teachers): your birth year + the first letter of your last name (example 1985D).</small></label>
+        <button class="btn primary block" id="go">Sign in as Teacher / Registrar / Finance / IT Admin</button>
+      </form>
+    </div>
+
+    <button class="link" id="showForgot" type="button">Forgot your password?</button>
+    <p class="muted fine">No account yet? Your school's IT Administrator creates teacher accounts, and your teacher creates student accounts.</p>
+  </section>
+
+  <section id="forgot" hidden>
+    <h1>Reset your password</h1>
+    <p class="muted">A reset link is sent to the <b>email address on your account</b> (the one you gave when your account was created). Students: enter your Exam ID No. or email. <b>Teachers:</b> only your school\u2019s IT Admin can reset your password, please contact them.</p>
+    <form id="ff" novalidate>
+      <label id="fschoolWrap">School code <small>Teachers only. Leave blank otherwise.</small><input id="fschool" autocapitalize="characters"></label>
+      <label>Email, Employee No. or Exam ID No.<input id="fwho" autocomplete="username" autocapitalize="none" required></label>
+      <button class="btn primary block" id="fgo">Send reset link</button>
+    </form>
+    <button class="link" id="backSignin" type="button">Back to sign in</button>
+  </section>
+
+  <section id="resetPw" hidden>
+    <h1>Choose a new password</h1>
+    <p class="muted">At least 10 characters with a letter and a number (students: at least 8).</p>
+    <form id="fr" novalidate>
+      <label>New password<input id="rp1" type="password" autocomplete="new-password" required></label>
+      <label>Confirm new password<input id="rp2" type="password" autocomplete="new-password" required></label>
+      <button class="btn primary block" id="rgo">Save password</button>
+    </form>
+  </section>
+</main>
+<script src="js/password-toggle.js"></script>
+<script type="module">
+import { auth, login, friendlyError, destinationFor, sendReset, getProfile, resetWithToken } from "./js/auth.js";
+window.__arkReady = true;
+const $ = (id) => document.getElementById(id), msg = $("msg");
+const show = (t, ok) => { msg.textContent = t; msg.hidden = false; msg.className = "notice " + (ok ? "ok" : "err"); };
+if (new URLSearchParams(location.search).has("denied")) show("Your account does not have access to that page, or your school is not active.");
+try { $("school").value = localStorage.getItem("ark.schoolCode") || ""; } catch {}
+
+/* ---------- Student  /  Teacher + IT Admin tabs ---------- */
+let mode = "student";
+const setMode = (m, focus) => {
+  mode = m;
+  const stu = m === "student";
+  $("tabStudent").setAttribute("aria-selected", String(stu));
+  $("tabStaff").setAttribute("aria-selected", String(!stu));
+  $("tabStudent").tabIndex = stu ? 0 : -1; $("tabStaff").tabIndex = stu ? -1 : 0;
+  $("panelStudent").hidden = !stu; $("panelStaff").hidden = stu;
+  msg.hidden = true;
+  try { localStorage.setItem("ark.loginMode", m); } catch {}
+  if (focus) $(stu ? "sid" : (($("school").value || "").trim() ? "email" : "school")).focus();
+};
+$("tabStudent").onclick = () => setMode("student", true);
+$("tabStaff").onclick = () => setMode("staff", true);
+for (const t of [$("tabStudent"), $("tabStaff")]) t.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") { const next = mode === "student" ? "staff" : "student"; setMode(next, false); $(next === "student" ? "tabStudent" : "tabStaff").focus(); }
+});
+{ /* start on the tab the person used last (or ?as=student / ?as=staff / #staff) */
+  let m = "student";
+  try { m = localStorage.getItem("ark.loginMode") || m; } catch {}
+  const q = new URLSearchParams(location.search).get("as") || location.hash.slice(1);
+  if (q === "staff" || q === "teacher" || q === "admin") m = "staff"; else if (q === "student") m = "student";
+  setMode(m === "staff" ? "staff" : "student", false);
+}
+
+/* ---------- link from the reset email: ?reset=TOKEN&u=ID ---------- */
+{
+  const q = new URLSearchParams(location.search), tok = q.get("reset"), uid = q.get("u");
+  if (tok && uid) {
+    $("signin").hidden = true; $("resetPw").hidden = false;
+    $("fr").addEventListener("submit", async (e) => {
+      e.preventDefault(); msg.hidden = true;
+      const a = $("rp1").value;
+      if (a.length < 8 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) return show("Use at least 8 characters (10 for staff) with a letter and a number.");
+      if (a !== $("rp2").value) return show("The two passwords do not match.");
+      $("rgo").disabled = true;
+      try { await resetWithToken(uid, tok, a); history.replaceState(null, "", "login.html"); $("resetPw").hidden = true; $("signin").hidden = false; show("Password changed. Sign in with your new password.", true); }
+      catch (err) { show(friendlyError(err)); $("rgo").disabled = false; }
+    });
+  }
+}
+
+/* ---------- forgot password ---------- */
+const view = (forgot) => {
+  $("signin").hidden = forgot; $("forgot").hidden = !forgot; msg.hidden = true;
+  if (forgot) {
+    const stu = mode === "student";
+    $("fschoolWrap").hidden = stu;
+    $("fschool").value = stu ? "" : $("school").value;
+    $("fwho").value = stu ? $("sid").value : $("email").value;
+  }
+};
+$("showForgot").onclick = () => view(true); $("backSignin").onclick = () => view(false);
+$("ff").addEventListener("submit", async (e) => {
+  e.preventDefault(); msg.hidden = true;
+  const who = $("fwho").value.trim(); if (!who) return show("Enter your email, Employee No. or Exam ID No.");
+  if ($("fschool").value.trim()) return show("Teacher passwords can only be reset by your school's IT Admin. Please contact your IT Admin.");
+  $("fgo").disabled = true;
+  try {
+    const r = await sendReset(who, $("fschool").value);
+    if (r === "noemail") show("No email is saved for this account, so a link cannot be sent. Teachers: ask your school's IT Admin to reset your password. Students: ask your teacher.");
+    else show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder. After choosing a new password, sign in with it.", true);
+  } catch (err) {
+    if (err.code === "auth/user-not-found") show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder.", true);
+    else show(friendlyError(err));
+  }
+  finally { $("fgo").disabled = false; }
+});
+
+/* ---------- sign in (one handler for both tabs) ---------- */
+async function signIn(who, password, school, wantStudent, btn) {
+  msg.hidden = true;
+  if (!who.trim() || !password) return show(wantStudent ? "Enter your Exam ID No. and password." : "Enter your Employee No. or email, and your password.");
+  btn.disabled = true;
+  let c;
+  try { c = await login(who, password, school); } catch (err) { show(friendlyError(err)); btn.disabled = false; return; }
+  try {
+    const p = await getProfile(c.user.uid);
+    if (p && wantStudent && p.role !== "student") {
+      await auth.signOut(); btn.disabled = false;
+      return show("This is the Student sign in. Teachers, Registrars, Finance and IT Admins: use the Teacher / Registrar / Finance / IT Admin tab.");
+    }
+    if (p && !wantStudent && p.role === "student") {
+      await auth.signOut(); btn.disabled = false;
+      return show("This is the Teacher / Registrar / Finance / IT Admin sign in. Students: use the Student tab.");
+    }
+    if (!wantStudent) { try { localStorage.setItem("ark.schoolCode", school.trim().toUpperCase()); } catch {} }
+    location.href = await destinationFor(c.user);
+  } catch (err) { await auth.signOut(); show(err.message); btn.disabled = false; }
+}
+$("fs").addEventListener("submit", (e) => { e.preventDefault(); signIn($("sid").value, $("spw").value, "", true, $("sgo")); });
+$("ft").addEventListener("submit", (e) => { e.preventDefault(); signIn($("email").value, $("pw").value, $("school").value, false, $("go")); });
+</script></body></html>

@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Super Admin - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<body><div class="wrap">
+<div class="top"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">Super Admin</span></div>
+<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice" hidden role="alert"></div>
+
+<div class="panel"><h2>Register a school</h2>
+<p class="muted">Each school gets a <b>school code</b> and its own <b>IT Admin</b>. The IT Admin creates the faculty / teacher accounts and monitors that school only.</p>
+<form id="newS" class="row" novalidate>
+<label>School name<input name="name" autocomplete="off" required></label>
+<label class="narrow">School code<input name="code" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="ARK-RIZAL" required></label>
+<label>IT Admin full name<input name="adminName" autocomplete="off" required></label>
+<label>IT Admin email<input name="adminEmail" type="email" autocomplete="off" required></label>
+<button class="btn primary" id="addBtn">Register school</button></form>
+<small>Code: 3-20 letters, numbers or hyphens. It cannot be changed later. A temporary password is generated for the IT Admin and shown once.</small></div>
+
+<div class="panel"><h2>Schools</h2><div class="tablewrap"><table id="tbl"></table></div></div>
+</div>
+
+<dialog id="dlg"><h2 id="dlgTitle"></h2><p id="dlgBody"></p>
+  <code class="pw" id="dlgPw" hidden></code>
+  <div class="row"><button class="btn" id="dlgCopy" hidden>Copy</button><button class="btn primary" id="dlgOk">Close</button></div>
+</dialog>
+<script type="module" src="js/superadmin.js"></script>
+<script src="js/mobile.js" defer></script></body></html>

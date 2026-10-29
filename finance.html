@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Finance - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css">
+<!-- SheetJS: used only to download lists as Excel files -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head><body><div class="wrap wide">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">Finance</span></div>
+<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice noprint" hidden role="alert"></div>
+<div class="tabs noprint" id="tabs">
+<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="pay">Record a payment</button><button class="btn" data-t="tx">Payment transactions</button>
+<button class="btn" data-t="bal">Student balances</button><button class="btn" data-t="calc">Payment computation</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button></div>
+<div class="panel noprint"><div class="row"><label>School year<select id="fnYear"></select></label></div>
+<p class="muted fine">Everything on these pages is for the chosen school year. Students come from the <b>enrolled masterlist</b> (Registrar) of that school year; each student's grade level and voucher type decide the total to pay.</p></div>
+
+<!-- DASHBOARD -->
+<section data-s="dash">
+<div class="cards wide3" id="dCards"></div>
+<div class="dgrid">
+<div class="panel"><h2>Collections today</h2><div class="tablewrap"><table id="dToday"></table></div></div>
+<div class="panel"><h2>Per payment transaction</h2><div class="tablewrap"><table id="dType"></table></div></div>
+<div class="panel"><h2>Per voucher type</h2><div class="tablewrap"><table id="dVoucher"></table></div></div>
+<div class="panel"><h2>Per grade level</h2><div class="tablewrap"><table id="dGrade"></table></div></div>
+</div>
+<p class="muted fine">Total student balance counts only what students still owe (an overpayment does not reduce another student's balance). Voided payments are not counted.</p>
+</section>
+
+<!-- RECORD A PAYMENT -->
+<section data-s="pay" hidden><div class="panel">
+<h2>Record a payment</h2>
+<div class="row"><label>Find an enrolled student<input id="fpQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label><label>Student<select id="fpStu"></select></label></div>
+<div class="infogrid" id="fpInfo" hidden></div>
+<div class="tablewrap" id="fpLinesBox" hidden><table id="fpLines"></table></div>
+<div class="formgrp"><h3>Payment details</h3>
+<div class="row"><label>Date of payment <span class="req">*</span><input type="date" id="fpDate"></label><label>Payment transaction <span class="req">*</span><select id="fpType"></select></label>
+<label>Amount (PHP) <span class="req">*</span><input id="fpAmt" type="number" min="0" step="0.01" inputmode="decimal"></label>
+<label>Receipt / OR No.<input id="fpOr" maxlength="30" autocomplete="off"></label></div>
+<div class="row" style="margin-top:.6rem"><label>Remarks<input id="fpNote" maxlength="200" autocomplete="off"></label></div>
+<div class="row" style="margin-top:.8rem"><button class="btn primary" id="fpSave" type="button">Save payment</button></div></div>
+<div class="formgrp"><h3>Payments of this student</h3><div class="tablewrap"><table id="fpHist"></table></div></div>
+</div></section>
+
+<!-- PAYMENT TRANSACTIONS -->
+<section data-s="tx" hidden><div class="panel">
+<h2>Payment transactions</h2>
+<div class="row"><label>Search<input id="txQ" placeholder="Student, ID No. or receipt No." autocomplete="off"></label><label>From<input type="date" id="txFrom"></label><label>To<input type="date" id="txTo"></label>
+<label>Transaction<select id="txType"></select></label><label>Grade level<select id="txGrade"></select></label><label>Show<select id="txStatus"><option value="active">Valid payments</option><option value="void">Voided only</option><option value="">All</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="txXlsx" type="button">Download (Excel)</button><button class="btn" id="txToday" type="button">Today only</button><button class="btn" id="txClear" type="button">Clear filters</button></div>
+<p class="muted fine" id="txCount"></p>
+<div class="scrollbox"><table id="txTbl"></table></div></div></section>
+
+<!-- STUDENT BALANCES -->
+<section data-s="bal" hidden><div class="panel">
+<h2>Student balances</h2>
+<div class="row"><label>Search<input id="sbQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label><label>Grade level<select id="sbGrade"></select></label><label>Voucher<select id="sbVoucher"></select></label>
+<label>Status<select id="sbStatus"><option value="">All students</option><option value="bal">With a balance</option><option value="paid">Fully paid</option><option value="none">No payment yet</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="sbXlsx" type="button">Download (Excel)</button></div>
+<p class="muted fine" id="sbCount"></p>
+<div class="scrollbox"><table id="sbTbl"></table></div>
+<p class="muted fine">These balances are also shown to each student under <b>Balance &amp; payments</b> on the Student page.</p></div></section>
+
+<!-- PAYMENT COMPUTATION -->
+<section data-s="calc" hidden><div class="panel">
+<h2>Payment computation - total to pay per student</h2>
+<p class="muted fine">Calculated separately for each voucher type (PUB, ALS, ESC and so on) from the fee schedule in <b>Settings</b>, and for each grade level on the enrolled masterlist. Below each amount: the fees that make it up and how many enrolled students it applies to.</p>
+<div class="tablewrap"><table id="cmTbl" class="matrix"></table></div></div></section>
+
+<!-- HISTORY -->
+<section data-s="history" hidden><div class="panel">
+<h2>History log</h2>
+<p class="muted fine">Every payment recorded or voided, and every change to the payment settings, with who did it and when. Entries cannot be edited or deleted.</p>
+<div id="hiNote" class="notice err" hidden></div>
+<div class="row"><label>Search<input id="hiQ" placeholder="Student, person or detail" autocomplete="off"></label></div>
+<div class="btnbar"><button class="btn" id="hiRefresh" type="button">Refresh</button></div>
+<p class="muted fine" id="hiCount"></p>
+<div class="scrollbox"><table id="hiTbl"></table></div></div></section>
+
+<!-- SETTINGS -->
+<section data-s="settings" hidden>
+<div class="subnav noprint" data-sub="settings" aria-label="Settings">
+<button class="btn" type="button" data-p="stTypes">Payment transactions</button><button class="btn" type="button" data-p="stFees">Fee schedule (payment computation)</button></div>
+<div class="panel" data-p="stTypes"><h2>Payment transactions</h2>
+<p class="muted fine">The kinds of payment the school collects, for example Tuition, Miscellaneous and Intramurals. Each one can be given an amount per grade level and voucher type in the fee schedule, and is chosen when a payment is recorded.</p>
+<div class="chiplist" id="tyList"></div>
+<div class="row"><label>Add a payment transaction<input id="tyNew" maxlength="30" placeholder="e.g. Books" autocomplete="off"></label><button class="btn primary" id="tyAdd" type="button">Add</button></div></div>
+<div class="panel" data-p="stFees" hidden><h2>Fee schedule - <span id="fsYear"></span></h2>
+<p class="muted fine">Pick a voucher group, then type the amount each grade level pays for each transaction. A student's total to pay uses the group of his or her voucher type. A <b>blank</b> cell falls back to <b>Default for all students</b>; type <b>0</b> to make it free for that group.</p>
+<div class="row"><label>Voucher group<select id="fsGroup"></select></label><label>Copy the whole schedule from<select id="fsCopy"></select></label><button class="btn" id="fsCopyGo" type="button">Copy</button></div>
+<div class="tablewrap"><table id="fsTbl" class="feegrid"></table></div>
+<div class="btnbar"><button class="btn primary" id="fsSave" type="button">Save this group</button><button class="btn" id="fsClear" type="button">Clear this group</button></div></div>
+</section>
+</div>
+<script type="module" src="js/finance.js"></script>
+<script src="js/mobile.js" defer></script>
+</body></html>

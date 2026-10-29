@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IT Admin - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span>IT Admin</span></div>
+    <p class="muted" style="color:#bbb;margin:.2rem 0 1rem;font-size:.85rem" id="school"></p>
+    <nav>
+      <a href="#dashboard" data-v="dashboard">Dashboard</a>
+      <a href="#teachers" data-v="teachers">Accounts</a>
+      <a href="#branding" data-v="branding">Branding</a>
+      <a href="#activity" data-v="activity">Activity log</a>
+      <a href="teacher.html" class="tools">Teacher tools &rarr;</a>
+    </nav>
+    <div class="who"><span id="who"></span><button class="btn" id="out">Sign out</button></div>
+  </aside>
+
+  <main class="main">
+    <div class="top"><h1 id="title">Dashboard</h1>
+      <span class="sync" id="sync" role="status"><i class="dot"></i><span>Online</span></span></div>
+    <div id="msg" class="notice" hidden role="alert"></div>
+
+    <section data-view="dashboard">
+      <div class="cards">
+        <div class="stat"><b id="s-teachers">-</b><span>Faculty / teachers</span></div>
+        <div class="stat"><b id="s-active">-</b><span>Active teachers</span></div>
+        <div class="stat"><b id="s-students">-</b><span>Student accounts</span></div>
+        <div class="stat"><b id="s-exams">-</b><span>Examinations</span></div>
+        <div class="stat"><b id="s-scans">-</b><span>Scanned answer sheets</span></div>
+      </div>
+      <div class="panel"><h2>Recent activity</h2><div class="tablewrap"><table id="recent"></table></div></div>
+    </section>
+
+    <section data-view="teachers" hidden>
+      <div class="panel">
+        <h2>Add a faculty / teacher, registrar or finance account</h2>
+        <p class="muted">Only you can create teacher, registrar and finance accounts for this school. The <b>Registrar</b> registers and enrols students and assigns each section's adviser; the adviser (teacher) then activates the student accounts. <b>Finance</b> records school payments and shows each student's balance.</p>
+        <form id="newT" class="row" novalidate>
+          <label>Account type<select name="role"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option></select></label>
+          <label>Last name<input name="lastName" autocomplete="off" required></label>
+          <label>First name<input name="firstName" autocomplete="off" required></label>
+          <label class="narrow">M.I.<input name="mi" maxlength="1" autocomplete="off"></label>
+          <label>Employee No.<input name="employeeId" autocomplete="off" required></label>
+          <label>Birthday<input name="birthday" type="date" required></label>
+          <label>Email <small>Optional. Used for password reset.</small><input name="email" type="email" autocomplete="off" placeholder="Leave blank: reset links go to your inbox"></label>
+          <button class="btn primary" id="addBtn">Create account</button>
+        </form>
+        <small>Username = Employee No. (with the school code), for teachers, registrars and finance staff alike. Temporary password = birth year + first letter of the last name (example <b>1985D</b>). The teacher must choose a new password at first sign-in. If you enter the teacher's <b>real email</b>, the account is created with that email: they can still sign in with school code + Employee No., and <b>Forgot your password?</b> sends the reset link to that email.</small>
+      </div>
+      <div class="panel">
+        <div class="row"><label>Search<input id="q" placeholder="Name, Employee No. or Exam ID No."></label>
+          <label>Show<select id="roleF"><option value="">Teachers and students</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="student">Students only</option></select></label></div>
+        <div class="tablewrap"><table id="teachers"></table></div>
+      </div>
+    </section>
+
+    <section data-view="branding" hidden>
+      <div class="panel">
+        <h2>School name and logo</h2>
+        <p class="muted">Shown instead of the default "ARK" mark across your school's pages (sign-in page excepted). Visible to your teachers and students right away.</p>
+        <form id="brandF" class="row" novalidate>
+          <label>School name shown on screen<input id="brandName" autocomplete="off" maxlength="80" placeholder="Registered name is used if left blank"></label>
+          <label>Logo (PNG/JPG/WebP; it is shrunk automatically)<input id="brandLogo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <div><span class="muted" style="display:block;margin-bottom:.3rem">Preview</span><div class="logo-prev" id="brandPrev">No logo</div></div>
+          <button class="btn primary" id="brandSave">Save</button>
+          <button class="btn" id="brandClear" type="button">Remove logo</button>
+        </form>
+      </div>
+    </section>
+
+    <section data-view="activity" hidden>
+      <div class="panel"><div class="tablewrap"><table id="audit"></table></div></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg"><h2 id="dlgTitle"></h2><p id="dlgBody"></p>
+  <code class="pw" id="dlgPw" hidden></code>
+  <div class="row"><button class="btn" id="dlgCopy" hidden>Copy</button><button class="btn primary" id="dlgOk">Close</button></div>
+</dialog>
+<script type="module" src="js/admin.js"></script>
+<script src="js/mobile.js" defer></script>
+</body></html>

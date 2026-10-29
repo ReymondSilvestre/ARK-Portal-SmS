@@ -1,0 +1,170 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teacher - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css">
+<style id="pg">@page{margin:10mm}</style>
+<!-- SheetJS: used only to import Excel class lists and to export results to .xlsx -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head><body><div class="wrap">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">Teacher</span></div>
+<span><a id="adminLink" href="admin.html" class="btn small" hidden>&larr; IT Admin</a> <span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice noprint" hidden role="alert"></div>
+<div class="tabs noprint" id="tabs">
+<button class="btn" data-t="classes">Sections</button><button class="btn" data-t="students">Students</button>
+<button class="btn" data-t="exams">Examinations</button><button class="btn" data-t="modules">Modules</button><button class="btn" data-t="sheet">Answer sheets</button>
+<button class="btn" data-t="scan">Scanner</button><button class="btn" data-t="results">Results</button></div>
+
+<!-- SECTIONS -->
+<section data-s="classes"><div class="panel"><h2>Sections</h2>
+<p class="muted fine">Every section has its own <b>classroom code</b>. Give it to students of other teachers in your school: they join from their account and appear under that section (their own section and teacher stay separate). They then see your exam results and modules.</p>
+<p class="notice ok noprint">Sections are created by the <b>Registrar</b>, who also assigns the adviser. You see the sections where you are the adviser.</p>
+<div class="row noprint" hidden><label>Class / section<input id="clName" placeholder="Grade 8 - Ruby"></label><button class="btn primary" id="clAdd">Add section</button></div>
+<div class="tablewrap"><table id="clTbl"></table></div></div></section>
+
+<!-- STUDENTS -->
+<section data-s="students" hidden><div class="panel"><h2>Students</h2>
+<div class="notice ok"><b>Students are registered and enrolled by the Registrar.</b> Students assigned to your sections appear in the class list below. Press <b>Activate account</b> to let a student sign in. Username = <b>Exam ID No.</b> (the student's LRN, or the Student ID No. if there is no LRN yet).</div>
+<div class="row"><label>Section<select id="stClass"></select></label></div>
+<div hidden id="stManual">
+<div class="row"><label>Last name<input id="stLast" autocomplete="off"></label>
+<label>First name<input id="stFirst" autocomplete="off"></label>
+<label class="narrow">M.I.<input id="stMi" maxlength="1" autocomplete="off"></label></div>
+<div class="row" style="margin-top:.6rem"><label>Birthday<input type="date" id="stBday"></label>
+<label>Email <small>Optional.</small><input type="email" id="stEmail" autocomplete="off" placeholder="Optional"></label>
+<label class="narrow">Age<input id="stAge" readonly tabindex="-1"><small>Automatic</small></label>
+<label>Exam ID No.<input id="stNext" readonly value="Created automatically"><small>Also the student's username.</small></label>
+<button class="btn primary" id="stAdd">Add student</button></div>
+<div class="row" style="margin-top:.8rem"><label>Import a class list (Excel or CSV)
+<input type="file" id="stCsv" accept=".csv,.txt,.xlsx,.xls">
+<small>Columns: <b>Exam ID No.</b>, <b>Last Name</b>, <b>First Name</b>, <b>M.I.</b>, <b>Birthday</b> (YYYY-MM-DD), <b>Email</b> (optional). A blank Exam ID No. is created automatically. A single "Last, First M." column also works.</small></label></div>
+</div>
+<h3>Activate student accounts</h3>
+<p class="muted fine">Username = Exam ID No. Temporary password = birth year + first letter of the last name (example <b>2012D</b>). The student must choose a new password at first sign-in. If you entered the student's <b>real email</b>, the account is created with that email: the student can still sign in with the Exam ID No. Password resets are done only by the school's <b>IT Admin</b>.</p>
+<div class="row"><button class="btn" id="stLogins">Activate all student accounts in this section</button></div>
+<div class="listbar noprint"><h3>Class list</h3>
+<div class="fpop" id="stFilter"><button type="button" class="btn small iconbtn" aria-haspopup="true" aria-expanded="false" title="Filter and sort the class list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span>Filter</span></button>
+<div class="fpanel" hidden><label>Section<select id="stFSec"></select></label>
+<label>Sort names<select id="stFSort"><option value="az">A &rarr; Z (alphabetical)</option><option value="za">Z &rarr; A</option><option value="id">Exam ID No.</option></select></label>
+<button type="button" class="btn small" data-reset>Reset</button></div></div></div>
+<div class="tablewrap"><table id="stTbl"></table></div></div></section>
+
+<!-- EXAMINATIONS -->
+<section data-s="exams" hidden>
+<div class="tabs seg noprint" id="exNav">
+<button class="btn on" data-exv="list" type="button">My exams</button><button class="btn" data-exv="create" type="button">+ Create exam</button>
+<button class="btn" data-exv="key" type="button">Answer key</button><button class="btn" id="exGoSheet" type="button">Answer sheets &rarr;</button></div>
+
+<!-- view: my exams -->
+<div data-ev="list"><div class="panel">
+<div class="listbar noprint"><h2 style="margin:0">My exams</h2><label class="inl">Show<select id="exFilter"></select></label></div>
+<div id="exList" class="excards"></div></div></div>
+
+<!-- view: create / edit -->
+<div data-ev="create" hidden><div class="panel">
+<h2 id="exHead">New examination</h2>
+<h3 class="step"><b>1</b> Exam details</h3>
+<div class="row"><label>Title<input id="exTitle"></label><label>Subject<input id="exSub"></label>
+<label>Term / quarter<select id="exTerm"></select></label>
+<label>Section<select id="exClass"></select></label><label>Date<input type="date" id="exDate"></label></div>
+<div class="row" style="margin-top:.8rem"><label>Number of items<input type="number" id="exN" min="1" max="100" value="20"></label>
+<label>Multiple choice letters<select id="exCh"><option value="5">A-E</option><option value="4">A-D</option></select></label>
+<label>Passing %<input type="number" id="exPass" value="75" min="1" max="100"></label></div>
+
+<h3 class="step"><b>2</b> How will students take it?</h3>
+<input type="checkbox" id="exOnline" hidden>
+<div class="modes" id="exMode">
+<button type="button" class="mode" data-mode="manual"><b>Type the questions</b><span>Write each question and its choices here. Students read them beside their answer sheet and answer online.</span></button>
+<button type="button" class="mode" data-mode="link"><b>Use an exam paper link</b><span>Paste a link to your exam file (Google Drive, PDF). It shows beside the student's answer sheet.</span></button>
+<button type="button" class="mode" data-mode="paper"><b>Printed only</b><span>Print answer sheets and scan them with the camera. Not taken online.</span></button></div>
+<div class="onlinebox" id="exOnlineBox" hidden>
+<div class="row"><label class="narrow">Time limit (minutes)<input type="number" id="exTime" min="0" max="600" value="0"><small>0 = no limit</small></label>
+<label id="exLinkRow">Exam paper link<input id="exLink" type="url" placeholder="https://"><small>Google Drive: set sharing to &quot;Anyone with the link can view&quot;.</small></label></div>
+<label style="margin-top:.6rem">Instructions for students (optional)<textarea id="exInst" rows="2" maxlength="1000"></textarea></label>
+<label class="chk"><input type="checkbox" id="exShow" checked><span>After submitting, show the student which items were wrong and the correct answer</span></label>
+<label class="chk" style="margin-bottom:0"><input type="checkbox" id="exOpen"><span>Open it for students as soon as I save (you can switch it open or closed later from My exams)</span></label></div>
+
+<h3 class="step"><b>3</b> Questions and answer key</h3>
+<p class="muted fine" id="exStepHint"></p>
+<details class="bulk noprint"><summary>Quick tools</summary>
+<div class="toolbar" style="margin-top:.6rem">
+<label>Set items from<input type="number" id="exFrom" min="1" placeholder="1"></label>
+<label>to<input type="number" id="exTo" min="1" placeholder="10"></label>
+<label class="grow">as<select id="exBulkType"></select></label>
+<button class="btn" id="exBulk" type="button">Apply to range</button></div></details>
+<div class="toolbar"><button class="btn small" id="exOpenAll" type="button">Expand all</button>
+<button class="btn small" id="exCloseAll" type="button">Collapse all</button>
+<label class="chk" style="flex:0 0 auto;margin:0;font-weight:400"><input type="checkbox" id="exAuto" checked><span>Jump to the next number after choosing a key</span></label></div>
+<div class="items" id="exItems"></div>
+<div style="margin-top:.6rem"><button class="btn" id="exAddQ" type="button">+ Add question</button></div>
+<div class="savebar"><button class="btn primary" id="exAdd" type="button">Save exam</button><button class="btn" id="exCancel" type="button" hidden>Cancel editing</button></div>
+</div></div>
+
+<!-- view: answer key -->
+<div data-ev="key" hidden><div class="panel">
+<div class="row noprint"><label>Examination<select id="kvExam"></select></label>
+<button class="btn primary" id="kvPrint" type="button">Print answer key</button><button class="btn" id="kvEdit" type="button">Edit this exam</button></div>
+<div id="kvBody" style="margin-top:1rem"></div></div></div>
+</section>
+
+<!-- MODULES -->
+<section data-s="modules" hidden><div class="panel"><h2>Upload a module</h2>
+<p class="muted fine">Students see modules for their own section (or for all your sections), organised by term / quarter. You can also send a module to <b>one student only</b>.</p>
+<div class="row"><label>Title<input id="mdTitle" maxlength="120"></label><label>Term / quarter<select id="mdTerm"></select></label></div>
+<div class="sendto"><span class="lbl">Send to</span>
+<div class="modes" id="mdMode" style="margin-top:.4rem">
+<button type="button" class="mode on" data-mdmode="class"><b>A whole section</b><span>Every student in the section you choose (or all your sections).</span></button>
+<button type="button" class="mode" data-mdmode="one"><b>One student only</b><span>Only the student you pick can see this module. Nobody else in the class will.</span></button></div>
+<div class="row" style="margin-top:.7rem">
+<label id="mdClassL">Section<select id="mdClass"></select></label>
+<label id="mdStuSecL" hidden>Section of the student<select id="mdStuSec"></select></label>
+<label id="mdStuL" hidden>Student<select id="mdStu"></select></label></div></div>
+<div class="row" style="margin-top:.6rem"><label>Description (optional)<input id="mdDesc" maxlength="300"></label></div>
+<div class="row" style="margin-top:.6rem"><label>File (PDF, Word, PowerPoint, image... up to 8 MB)<input type="file" id="mdFile"></label>
+<label>or a link (Google Drive, YouTube...)<input id="mdUrl" type="url" placeholder="https://"></label>
+<button class="btn primary" id="mdAdd">Upload module</button></div>
+<progress id="mdProg" max="1" value="0" hidden></progress></div>
+<div class="panel"><div class="row"><label>Show<select id="mdFilter"></select></label></div><div class="tablewrap"><table id="mdTbl"></table></div></div></section>
+
+<!-- ANSWER SHEETS -->
+<section data-s="sheet" hidden><div class="panel"><h2 class="noprint">Answer sheets</h2>
+<div class="row noprint"><label>Examination<select id="shExam"></select></label>
+<label>Print for<select id="shFor"></select></label>
+<label id="shCopiesL">Number of blank sheets<input type="number" id="shCopies" value="2" min="1" max="500"></label>
+<label>School name<input id="school"></label><label>Teacher<input id="teacher"></label>
+<button class="btn primary" id="shPrint">Print / save as PDF</button></div>
+<small class="noprint">Paper: <b>8.5 x 13 in, landscape</b> (Folio / Long bond), <b>two answer sheets per page</b>. In the print dialog choose that paper size, <b>Margins: None</b> and <b>Scale: 100%</b>. Cut each page along the dotted line: scan one sheet at a time. Named sheets are printed in alphabetical order for the chosen section.</small>
+<p class="noprint muted" id="shInfo"></p>
+<div id="sheetWrap" style="margin-top:1rem"></div></div></section>
+
+<!-- SCANNER -->
+<section data-s="scan" hidden><div class="panel"><h2>Scan answer sheets</h2>
+<div class="row"><label>Examination<select id="scExam"></select></label><label>Section<select id="scSec"></select></label>
+<button class="btn" id="camBtn">Start camera</button><button class="btn" id="capBtn" disabled>Capture now</button>
+<label class="chk"><input type="checkbox" id="autoCap" checked> Auto-capture</label>
+<label>or upload photo<input type="file" id="file" accept="image/*" capture="environment"></label></div>
+<p class="muted fine" id="scTip">Start the camera and hold ONE answer sheet in view, upright, with all 4 black corner squares visible. It is detected automatically and photographed as soon as it is steady.</p>
+<div class="vidwrap" id="vidwrap" hidden><video id="vid" class="vid" playsinline autoplay muted></video><canvas id="ovl" class="ovl"></canvas><div id="scStatus" class="scstat" role="status" aria-live="polite"></div></div>
+<canvas id="cv" hidden></canvas>
+<div id="review" hidden><p id="reviewNote" class="muted" hidden></p>
+<div class="row" style="margin-top:.8rem"><label>Exam ID No. (type it from the sheet)<input id="scId" autocomplete="off"><small id="scHint"></small></label>
+<label>Student<select id="scStu"></select></label>
+<button class="btn primary" id="scSave">Save result</button><button class="btn" id="scAgain" type="button">Rescan this sheet</button></div>
+<p id="sum"><b></b></p><div class="q" id="grid"></div>
+<div id="typedBox" hidden><h3>Written answers from the student</h3><div id="typedList"></div></div></div></div></section>
+
+<!-- RESULTS -->
+<section data-s="results" hidden><div class="panel"><h2>Results</h2>
+<div class="row noprint"><label>Examination<select id="reExam"></select></label>
+<div class="fpop" id="reFilter"><button type="button" class="btn iconbtn" aria-haspopup="true" aria-expanded="false" title="Filter and sort the results"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span>Filter</span></button>
+<div class="fpanel" hidden><label>Section<select id="reSec"></select></label>
+<label>Sort by<select id="reSort">
+<option value="sec_name">Section, then name A-Z</option><option value="sec_name_desc">Section, then name Z-A</option><option value="sec_score">Section, then highest score</option>
+<option value="score">Highest score (all sections)</option><option value="wrong">Most wrong answers</option>
+<option value="name">Name A-Z</option><option value="name_desc">Name Z-A</option><option value="id">Exam ID No.</option></select></label>
+<button type="button" class="btn small" data-reset>Reset</button></div></div>
+<button class="btn primary" id="xlsx">Download Excel</button><button class="btn" onclick="print()">Print report</button></div>
+<p id="stats"></p><div id="waiting" class="noprint" hidden></div><div class="tablewrap"><table id="reTbl"></table></div>
+<h2 style="margin-top:1rem">Item analysis (% correct)</h2><div class="q" id="items"></div></div></section>
+</div>
+<script type="module" src="js/teacher.js"></script>
+<script src="js/mobile.js" defer></script>
+</body></html>

@@ -1,0 +1,164 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Registrar - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css">
+<!-- SheetJS: used only to download (export) lists as Excel files -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head><body><div class="wrap wide">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">Registrar</span></div>
+<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice noprint" hidden role="alert"></div>
+<div class="tabs noprint" id="tabs">
+<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="reg">Student registration</button><button class="btn" data-t="enroll">Enrollment</button>
+<button class="btn" data-t="sections">Sections &amp; advisers</button><button class="btn" data-t="master">Registration masterlist</button><button class="btn" data-t="enrolled">Enrolled masterlist</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button></div>
+
+<!-- DASHBOARD -->
+<section data-s="dash"><div class="panel">
+<h2>Registrar dashboard</h2>
+<p class="muted fine">Based on the registration masterlist. A student is <b>enrolled</b> when he or she has an enrollment record for the chosen school year (and term / quarter, if one is chosen). Every other registered student is <b>not enrolled</b>.</p>
+<div class="row"><label>School year<select id="dsYear"></select></label><label>Term / quarter<select id="dsTermSel"></select></label></div>
+<p class="muted fine" id="dsCtx"></p></div>
+<div class="cards" id="dsCards"></div>
+<div class="dgrid">
+<div class="panel"><h2>Enrolled and not enrolled per grade level</h2><div class="tablewrap"><table id="dsGrade"></table></div></div>
+<div class="panel"><h2>Enrolled per cluster / strand</h2><div class="tablewrap"><table id="dsStrand"></table></div></div>
+<div class="panel"><h2>Enrolled and not enrolled per term / quarter</h2><p class="muted fine">For the chosen school year.</p><div class="tablewrap"><table id="dsTermTbl"></table></div></div>
+<div class="panel"><h2>Male and female - registration masterlist</h2><div class="tablewrap"><table id="dsGenReg"></table></div></div>
+<div class="panel"><h2>Male and female - enrolled masterlist</h2><div class="tablewrap"><table id="dsGenEn"></table></div></div>
+<div class="panel"><h2>Male and female per section</h2><div class="tablewrap"><table id="dsGenSec"></table></div></div>
+</div></section>
+
+<!-- STUDENT REGISTRATION -->
+<section data-s="reg" hidden><div class="panel">
+<h2 id="rgHead">Student registration</h2>
+<div class="row">
+<label>Grade level <span class="req">*</span><select id="rgGrade"></select></label>
+<label>Student ID No. <span class="req">*</span><input id="rgNo" autocomplete="off" maxlength="30"></label>
+<label>LRN <small>12 digits. Leave blank if the student has none yet.</small><input id="rgLrn" inputmode="numeric" autocomplete="off" maxlength="12"></label>
+<label>Voucher type<select id="rgVoucher"></select></label></div>
+<div class="row" style="margin-top:.6rem">
+<label>Last name <span class="req">*</span><input id="rgLast" autocomplete="off"></label>
+<label>First name <span class="req">*</span><input id="rgFirst" autocomplete="off"></label>
+<label>Middle name<input id="rgMiddle" autocomplete="off"></label>
+<label class="narrow">Suffix <small>Optional</small><input id="rgSuffix" maxlength="6" autocomplete="off" placeholder="Jr., III"></label></div>
+<div class="row" style="margin-top:.6rem">
+<label>Birthdate <span class="req">*</span><input type="date" id="rgBday"></label>
+<label class="narrow">Age<input id="rgAge" readonly tabindex="-1"><small>From the birthdate</small></label>
+<label>Gender <span class="req">*</span><select id="rgGender"><option value="">Choose</option><option>Male</option><option>Female</option></select></label>
+<label>Contact No.<input id="rgContact" inputmode="tel" autocomplete="off"></label></div>
+<div class="row" style="margin-top:.6rem"><label>Address<input id="rgAddress" autocomplete="off"></label></div>
+
+<div class="formgrp"><h3>Guardian / parents information</h3>
+<div class="row"><label>Father's name<input id="rgFather" autocomplete="off"></label><label>Mother's name<input id="rgMother" autocomplete="off"></label>
+<label>Guardian's name <small>Required if the student has no father or mother on record.</small><input id="rgGuardian" autocomplete="off"></label></div>
+<div class="row" style="margin-top:.6rem"><label>Guardian contact number<input id="rgGContact" inputmode="tel" autocomplete="off"></label>
+<label>Guardian's address<input id="rgGAddress" autocomplete="off"></label></div></div>
+<div class="formgrp" id="rgExtraBox" hidden><h3>Additional information</h3><div class="row" id="rgExtra"></div></div>
+<div class="formgrp" id="rgMasterBox" hidden><h3>Master list information</h3><p class="muted fine">Filled in after registration, while editing the student from the Master list.</p><div class="row" id="rgMaster"></div></div>
+<div class="row" style="margin-top:1rem"><button class="btn primary" id="rgSave">Save registration</button><button class="btn" id="rgCancel" type="button" hidden>Cancel editing</button></div>
+<p class="muted fine">Registered students go to the <b>Master list</b>. To place a student in a section, use the <b>Enrollment</b> tab.</p>
+</div></section>
+
+<!-- ENROLLMENT -->
+<section data-s="enroll" hidden>
+<div class="subnav noprint" data-sub="enroll" aria-label="Enrollment sections">
+<button class="btn" type="button" data-p="enForm">Enroll a student</button><button class="btn" type="button" data-p="enList">Enrolled in the section <span class="cnt" id="enCnt"></span></button></div>
+<div class="panel" data-p="enForm"><h2>Enroll a student</h2>
+<div class="row"><label>Find a registered student<input id="enQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
+<label>Student<select id="enStu"></select></label></div>
+<div class="infogrid" id="enInfo" hidden></div>
+<div class="row" style="margin-top:.6rem">
+<label>Grade level<select id="enGrade"></select></label>
+<label>Term / quarter<select id="enTerm"></select></label>
+<label class="narrow">School year<input id="enYear" maxlength="9" placeholder="2026-2027"></label>
+<label>Cluster / strand<select id="enStrand"></select></label>
+<label>Section<select id="enSection"></select><small id="enSecHint"></small></label></div>
+<div class="row" id="enExtra" style="margin-top:.6rem"></div>
+<div class="row" style="margin-top:.8rem"><button class="btn primary" id="enSave">Enroll student</button></div>
+</div>
+<div class="panel" data-p="enList" hidden><div class="listbar"><h2 style="margin:0">Enrolled in the chosen section</h2></div>
+<p class="ctxline">Section: <b class="enCtx"></b> <button class="btn small" type="button" data-goto="enroll:enForm">Change</button></p>
+<div class="tablewrap"><table id="enTbl"></table></div></div>
+</section>
+
+<!-- SECTIONS -->
+<section data-s="sections" hidden>
+<div class="subnav noprint" data-sub="sections" aria-label="Sections">
+<button class="btn" type="button" data-p="scAddP">Add a section</button><button class="btn" type="button" data-p="scListP">All sections <span class="cnt" id="scCnt"></span></button><button class="btn" type="button" data-p="scViewBox">Section students</button></div>
+<div class="panel" data-p="scAddP"><h2>Add a section</h2>
+<p class="muted fine">The adviser is chosen from the school's teacher accounts. The adviser sees the section and its students on the Teacher page and activates the student accounts.</p>
+<div class="row"><label>Grade level<select id="scGrade"></select></label><label>Cluster / strand<select id="scStrand"></select></label>
+<label>Section name<input id="scName" placeholder="Ruby" autocomplete="off"></label><label>Adviser<select id="scAdv"></select></label>
+<button class="btn primary" id="scAdd">Add section</button></div></div>
+<div class="panel" data-p="scListP" hidden><h2>All sections</h2><div class="row"><label>Show grade level<select id="scFilter"></select></label></div><div class="tablewrap"><table id="scTbl"></table></div></div>
+<div class="panel" data-p="scViewBox" id="scViewBox" hidden><h2 id="scViewHead">Section students</h2>
+<div class="row"><label>Section<select id="scViewSel"></select></label></div>
+<div class="tablewrap" style="margin-top:.8rem"><table id="scView"></table></div></div>
+</section>
+
+<!-- REGISTRATION MASTERLIST -->
+<section data-s="master" hidden>
+<div class="panel" data-p="mlList"><h2>Registration masterlist <span class="cnt" id="mlCnt"></span></h2><p class="muted fine">Every student who is registered, enrolled or not. Enrolled students are also on the <b>Enrolled masterlist</b>.</p>
+<div class="row"><label>Search<input id="mlQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
+<label>Grade level<select id="mlGrade"></select></label><label>Voucher<select id="mlVoucher"></select></label>
+<label>Sort names<select id="mlSort"><option value="az">A &rarr; Z</option><option value="za">Z &rarr; A</option><option value="no">Student ID No.</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="mlXlsx" type="button">Download all (Excel)</button><button class="btn" type="button" data-goto="enrolled:elList">Open the enrolled masterlist</button><button class="btn" type="button" data-goto="enrolled:mlSec">View / download per section</button></div>
+<div class="azbar" id="mlLetters" role="group" aria-label="Filter by first letter of the last name"></div>
+<p class="muted fine" id="mlCount"></p>
+<div class="scrollbox" id="mlScroll"><table id="mlTbl"></table></div></div>
+</section>
+
+<!-- ENROLLED MASTERLIST -->
+<section data-s="enrolled" hidden>
+<div class="subnav noprint" data-sub="enrolled" aria-label="Enrolled masterlist">
+<button class="btn" type="button" data-p="elList">Enrolled students <span class="cnt" id="elCnt"></span></button><button class="btn" type="button" data-p="mlSec">View / download per section</button></div>
+<div class="panel" data-p="elList"><h2>Enrolled masterlist</h2>
+<p class="muted fine">Only students who are enrolled in a section, taken from the enrollment records. A student enrolled in several terms / quarters appears once, with the terms listed.</p>
+<div class="row"><label>Search<input id="elQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
+<label>School year<select id="elYear"></select></label><label>Term / quarter<select id="elTerm"></select></label><label>Grade level<select id="elGrade"></select></label></div>
+<div class="row" style="margin-top:.6rem"><label>Cluster / strand<select id="elStrand"></select></label><label>Section<select id="elSection"></select></label><label>Voucher<select id="elVoucher"></select></label>
+<label>Sort names<select id="elSort"><option value="az">A &rarr; Z</option><option value="za">Z &rarr; A</option><option value="no">Student ID No.</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="elXlsx" type="button">Download enrolled masterlist (Excel)</button></div>
+<p class="muted fine" id="elCount"></p>
+<div class="scrollbox"><table id="elTbl"></table></div></div>
+<div class="panel" data-p="mlSec" hidden>
+<div id="msListBox"><h2>Enrolled masterlist per section</h2>
+<p class="muted fine">Pick a section to <b>view</b> its students with their master list details, or <b>download</b> that section as an Excel file. Students are placed in sections through the Enrollment tab.</p>
+<div class="row"><label>Grade level<select id="msGrade"></select></label><label>School year<select id="msYear"></select></label><label>Term / quarter<select id="msTerm"></select></label></div>
+<div class="btnbar"><button class="btn primary" id="msDlAll" type="button">Download all sections (one Excel file, a sheet per section)</button></div>
+<div class="tablewrap"><table id="msTbl"></table></div></div>
+<div id="msDetail" hidden>
+<div class="listbar"><h2 style="margin:0" id="msHead">Section</h2></div>
+<p class="muted fine" id="msSub"></p>
+<div class="btnbar"><button class="btn" id="msBack" type="button">&larr; Back to sections</button><button class="btn primary" id="msDl" type="button">Download this section (Excel)</button></div>
+<div class="scrollbox"><table id="msView"></table></div></div></div>
+</section>
+
+<!-- HISTORY LOG -->
+<section data-s="history" hidden>
+<div class="panel"><h2>History log</h2>
+<p class="muted fine">Every time a registrar adds, edits or deletes information, it is recorded here with the person, the date and time, and what changed. Entries cannot be edited or deleted.</p>
+<div id="hiNote" class="notice err" hidden></div>
+<div class="row"><label>Search<input id="hiQ" placeholder="Student, section, person or detail" autocomplete="off"></label>
+<label>Action<select id="hiAct"></select></label><label>Done by<select id="hiWho"></select></label>
+<label>From<input type="date" id="hiFrom"></label><label>To<input type="date" id="hiTo"></label></div>
+<div class="btnbar"><button class="btn" id="hiRefresh" type="button">Refresh</button><button class="btn primary" id="hiXlsx" type="button">Download history (Excel)</button><button class="btn" id="hiClear" type="button">Clear filters</button></div>
+<p class="muted fine" id="hiCount"></p>
+<div class="scrollbox"><table id="hiTbl"></table></div></div>
+</section>
+
+<!-- SETTINGS -->
+<section data-s="settings" hidden>
+<div class="subnav noprint" data-sub="settings" aria-label="Settings">
+<button class="btn" type="button" data-p="stVoucher">Voucher types</button><button class="btn" type="button" data-p="stStrand">Clusters / strands</button><button class="btn" type="button" data-p="stFields">Additional information</button></div>
+<div class="panel" data-p="stVoucher"><h2>Voucher types</h2><div class="chiplist" id="vtList"></div>
+<div class="row"><label>Add a voucher type<input id="vtNew" maxlength="12" placeholder="e.g. QVR" autocomplete="off"></label><button class="btn primary" id="vtAdd">Add</button></div></div>
+<div class="panel" data-p="stStrand" hidden><h2>Clusters / strands</h2><div class="chiplist" id="stList"></div>
+<div class="row"><label>Add a cluster / strand<input id="stNew" maxlength="40" placeholder="e.g. TVL-ICT" autocomplete="off"></label><button class="btn primary" id="stAdd">Add</button></div></div>
+<div class="panel" data-p="stFields" hidden><h2>Additional information</h2>
+<p class="muted fine">Add your own fields. <b>Student registration</b> fields appear on the registration form. <b>Enrollment</b> fields appear on the Enrollment form. <b>Master list</b> fields are filled in while editing a student from the Master list. All of them show as columns in the lists, can be downloaded to Excel, and can be downloaded to Excel.</p>
+<div id="fieldsBox"></div></div>
+</section>
+</div>
+<script type="module" src="js/registrar.js"></script>
+<script src="js/mobile.js" defer></script>
+</body></html>
