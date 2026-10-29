@@ -758,6 +758,24 @@ function actDeleteUser(actor, p) {
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
   return { ok: true };
 }
+/* Registrar: delete the login account of one student of the registrar's own school (even if it is already created).
+   The registration / enrollment records are NOT touched here; the web page removes or marks them afterwards. */
+function actRegistrarDropStudentAccount(actor, p) {
+  var S = makeS(actor); if (!S.isRegistrar) fail('permission-denied', 'Only the registrar can remove a student account here.');
+  var reg = getDoc('registry', String(p.registryId || ''));
+  if (!reg || reg.schoolId !== S.sid) fail('not-found', 'That student was not found.');
+  var examNo = String(reg.examNo || ''); if (!examNo) return { ok: true, removed: false };
+  var st = getDoc('students', examNo); if (!st || st.schoolId !== S.sid || !st.accountUid) return { ok: true, removed: false };
+  var uid = st.accountUid, lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    ['enrollments', 'teacherLinks', 'examAttempts', 'examSubmissions'].forEach(function (c) { purgeWhere(c, 'studentId', [examNo]); });
+    delete st.accountUid; delete st.email; putDoc('students', examNo, st);
+    dropAccount(uid);
+    logAudit(actor.uid, S.sid, 'student.account_deleted_by_registrar', uid, { username: examNo });
+    flushAll();
+  } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  return { ok: true, removed: true };
+}
 function purgeSchool(schoolId, removeAdmins) {
   var us = scan('users', { schoolId: [schoolId] }), uids = colOf(us.t, 0), people = [];
   us.hits.forEach(function (h) { var d = unpack(cellJson(us.t, h.i)); d.uid = uids[h.i]; if (d.role !== 'superadmin') people.push(d); });
@@ -812,6 +830,7 @@ function runCall(actor, c) {
         case 'adminSetTempPassword': return actSetPassword(actor, c.data || {});
         case 'adminSendReset': return actSendReset(actor, c.data || {});
         case 'adminDeleteUser': return actDeleteUser(actor, c.data || {});
+        case 'registrarDropStudentAccount': return actRegistrarDropStudentAccount(actor, c.data || {});
         case 'superClearSchoolData': return actEraseSchool(actor, c.data || {}, false);
         case 'superDeleteSchool': return actEraseSchool(actor, c.data || {}, true);
         case 'allocIds': return actAllocIds(actor, c.data || {});

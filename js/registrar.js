@@ -1,5 +1,5 @@
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding } from "./auth.js";
-import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp }
+import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, deleteField, callFn }
   from "./db.js";
 import { TERMS, termRank } from "./omr.js";
 
@@ -16,6 +16,8 @@ const run = async (fn) => { try { await fn(); } catch (e) { console.error(e); fl
 
 /* ---------- constants and helpers ---------- */
 const GRADES = ["Kindergarten", ...Array.from({ length: 12 }, (_, i) => "Grade " + (i + 1))];
+const MODALITIES = ["Face to Face", "Blended", "Modular", "Internal Agreement"];
+const REMARKS = ["Transferred Out", "Drop Out", "Cancelled Enrolled"];
 const DEFAULT_VOUCHERS = ["PUB", "ALS", "ESC"];
 const DEFAULT_STRANDS = ["STEM", "ABM", "HUMSS", "GAS", "TVL"];
 const schoolYearNow = () => { const d = new Date(), y = d.getFullYear(); return d.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`; };
@@ -50,7 +52,7 @@ async function refresh() {
 const saveSettings = () => setDoc(doc(db, "registrarSettings", SID), { schoolId: SID, voucherTypes: S.vouchers, strands: S.strands, fields: S.fields, updatedAt: serverTimestamp() }, { merge: true });
 
 /* ---------- history log: who changed what ---------- */
-const FLABEL = { gradeLevel: "Grade level", lrn: "LRN", voucherType: "Voucher type", lastName: "Last name", firstName: "First name", middleName: "Middle name", suffix: "Suffix", birthday: "Birthdate", gender: "Gender",
+const FLABEL = { schoolYear: "School year", gradeLevel: "Grade level", lrn: "LRN", voucherType: "Voucher type", lastName: "Last name", firstName: "First name", middleName: "Middle name", suffix: "Suffix", birthday: "Birthdate", gender: "Gender",
   contact: "Contact No.", address: "Address", father: "Father's name", mother: "Mother's name", guardianName: "Guardian's name", guardianContact: "Guardian contact No.", guardianAddress: "Guardian's address" };
 const clip = (v, n = 160) => String(v ?? "").slice(0, n);
 /** What changed between a saved student record and the new values (only the keys present in `patch`). */
@@ -96,6 +98,9 @@ show("dash");
 function render() {
   const noneV = "- none -", noneS = "- none / not applicable -";
   keep("rgGrade", options(GRADES)); keep("rgVoucher", options(S.vouchers, noneV));
+  keep("enModality", options(MODALITIES)); keep("elModality", options(MODALITIES, "All learning modalities")); keep("elRemark", `<option value="">All students</option><option value="__none">No remark (active)</option>` + REMARKS.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join(""));
+  keep("rmSel", `<option value="">- no remark (clear) -</option>` + REMARKS.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join(""));
+  keep("mlYear", options(yearsList(), "All school years")); keep("mlTerm", options(TERMS, "All terms / quarters")); $("yrList").innerHTML = yearChoices().map((y) => `<option value="${esc(y)}">`).join("");
   keep("enGrade", options(GRADES)); keep("enTerm", options(TERMS)); keep("enStrand", options(S.strands, noneS));
   keep("scGrade", options(GRADES)); keep("scStrand", options(S.strands, noneS)); keep("scFilter", options(GRADES, "All grade levels"));
   keep("mlGrade", options(GRADES, "All grade levels")); keep("mlVoucher", options(S.vouchers, "All voucher types"));
@@ -105,6 +110,7 @@ function render() {
   keep("msGrade", options(GRADES, "All grade levels")); keep("msYear", options(yearsList(), "All school years")); keep("msTerm", options(TERMS, "All terms"));
   keep("scAdv", S.teachers.map((t) => `<option value="${esc(t.uid)}">${esc(t.displayName)} (${esc(t.employeeId || "")})</option>`).join("") || `<option value="">No teacher accounts yet - ask the IT Admin</option>`);
   if (!$("enYear").value) $("enYear").value = schoolYearNow();
+  if (!$("rgYear").value && !editing) $("rgYear").value = schoolYearNow();
   renderVoucherStrand(); renderFieldSettings(); renderExtras(); renderDash(); renderMaster(); renderEnList(); renderMasterSections(); renderEnrollPicker(); renderSections(); renderSectionView(); renderEnrolled();
 }
 
@@ -165,11 +171,11 @@ let editing = null;
 $("rgBday").oninput = () => ($("rgAge").value = ageOf($("rgBday").value));
 function clearForm() {
   editing = null; Object.values(F).forEach((i) => ($(i).value = "")); $("rgAge").value = ""; $("rgGender").value = ""; $("rgVoucher").value = "";
-  $("rgNo").readOnly = false; renderExtras({}); document.querySelectorAll("#rgExtra [data-x],#rgMaster [data-x]").forEach((el) => (el.value = "")); $("rgMasterBox").hidden = true; $("rgHead").textContent = "Student registration"; $("rgSave").textContent = "Save registration"; $("rgCancel").hidden = true;
+  $("rgYear").value = schoolYearNow(); $("rgNo").readOnly = false; renderExtras({}); document.querySelectorAll("#rgExtra [data-x],#rgMaster [data-x]").forEach((el) => (el.value = "")); $("rgMasterBox").hidden = true; $("rgHead").textContent = "Student registration"; $("rgSave").textContent = "Save registration"; $("rgCancel").hidden = true;
 }
 $("rgCancel").onclick = clearForm;
 function fillForm(r) {
-  editing = r.id; $("rgGrade").value = r.gradeLevel || GRADES[0]; $("rgVoucher").value = r.voucherType || "";
+  editing = r.id; $("rgYear").value = r.schoolYear || ""; $("rgGrade").value = r.gradeLevel || GRADES[0]; $("rgVoucher").value = r.voucherType || "";
   $(F.no).value = r.studentNo; $(F.lrn).value = r.lrn || ""; $(F.last).value = r.lastName; $(F.first).value = r.firstName; $(F.middle).value = r.middleName || ""; $(F.suffix).value = r.suffix || "";
   $(F.bday).value = r.birthday || ""; $("rgAge").value = ageOf(r.birthday); $("rgGender").value = r.gender || ""; $(F.contact).value = r.contact || ""; $(F.address).value = r.address || "";
   $(F.father).value = r.father || ""; $(F.mother).value = r.mother || ""; $(F.guardian).value = r.guardianName || ""; $(F.gcontact).value = r.guardianContact || ""; $(F.gaddress).value = r.guardianAddress || "";
@@ -184,9 +190,10 @@ async function syncStudent(r) {
 }
 $("rgSave").onclick = () => run(async () => {
   const v = (k) => $(F[k]).value.trim();
-  const p = { gradeLevel: $("rgGrade").value, studentNo: v("no"), lrn: v("lrn").replace(/\s+/g, ""), voucherType: $("rgVoucher").value,
+  const p = { schoolYear: $("rgYear").value.trim(), gradeLevel: $("rgGrade").value, studentNo: v("no"), lrn: v("lrn").replace(/\s+/g, ""), voucherType: $("rgVoucher").value,
     lastName: v("last"), firstName: v("first"), middleName: v("middle"), suffix: v("suffix"), birthday: $(F.bday).value, gender: $("rgGender").value,
     contact: v("contact"), address: v("address"), father: v("father"), mother: v("mother"), guardianName: v("guardian"), guardianContact: v("gcontact"), guardianAddress: v("gaddress"), extra: { ...readExtras("rgExtra"), ...readExtras("rgMaster") } };
+  if (!/^\d{4}-\d{4}$/.test(p.schoolYear)) return flash("Enter the school year like 2026-2027.");
   if (!p.studentNo || !isStuNo(p.studentNo)) return flash("Enter the Student ID No. (letters, numbers, dot, dash or underscore only).");
   if (p.lrn && !isLrn(p.lrn)) return flash("The LRN must be exactly 12 digits. Leave it blank if the student has no LRN yet.");
   if (!p.lastName || !p.firstName) return flash("Enter the last name and first name.");
@@ -200,7 +207,7 @@ $("rgSave").onclick = () => run(async () => {
   const rec = { ...p, ...(old ? {} : { schoolId: SID, createdBy: user.uid, createdAt: serverTimestamp() }), updatedAt: serverTimestamp() };
   await setDoc(doc(db, "registry", id), rec, { merge: true });
   const who = `${p.name} (${p.studentNo})`, diff = old ? diffRec(old, p) : [];
-  if (!old) await logEvent("Registered student", "student", who, [], `${p.gradeLevel}${p.voucherType ? " - voucher " + p.voucherType : ""}`);
+  if (!old) await logEvent("Registered student", "student", who, [], `${p.schoolYear} - ${p.gradeLevel}${p.voucherType ? " - voucher " + p.voucherType : ""}`);
   else if (diff.length) await logEvent("Edited student", "student", who, diff);
   const merged = { ...(old || {}), ...p, extra: { ...(old?.extra || {}), ...p.extra }, id }; await syncStudent(merged);
   const was = editing; clearForm(); await refresh();
@@ -214,45 +221,66 @@ function latestEnrol(r) {
 }
 let mlLetter = "";
 const lastInit = (r) => (String(r.lastName || r.name || "").trim()[0] || "#").toUpperCase();
+/** Registered students after the search / grade / voucher / school year / term filters (the A-Z letter is applied afterwards). */
+function mlBase() {
+  const q = $("mlQ").value.trim().toLowerCase(), g = $("mlGrade").value, vt = $("mlVoucher").value, y = $("mlYear").value, t = $("mlTerm").value;
+  return S.registry.filter((r) => {
+    if ((g && r.gradeLevel !== g) || (vt && r.voucherType !== vt) || (q && ![r.studentNo, r.lrn, r.name].join(" ").toLowerCase().includes(q))) return false;
+    const mine = S.enrollments.filter((e) => e.registryId === r.id);
+    if (t) return mine.some((e) => e.term === t && (!y || e.schoolYear === y));          // enrolled in that quarter / term
+    if (y) return r.schoolYear === y || mine.some((e) => e.schoolYear === y);            // registered or enrolled in that school year
+    return true;
+  });
+}
+const mlSorted = () => {
+  const sort = $("mlSort").value, cmp = { az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name), no: (a, b) => String(a.studentNo).localeCompare(String(b.studentNo), undefined, { numeric: true }) }[sort];
+  return mlBase().filter((r) => !mlLetter || lastInit(r) === mlLetter).sort(cmp);
+};
 function renderMaster() {
-  const q = $("mlQ").value.trim().toLowerCase(), g = $("mlGrade").value, vt = $("mlVoucher").value, sort = $("mlSort").value;
-  const base = S.registry.filter((r) => (!g || r.gradeLevel === g) && (!vt || r.voucherType === vt) && (!q || [r.studentNo, r.lrn, r.name].join(" ").toLowerCase().includes(q)));
+  const sort = $("mlSort").value, base = mlBase();
   const have = new Set(base.map(lastInit));
   $("mlLetters").innerHTML = `<button type="button" data-l="" class="${mlLetter ? "" : "on"}">All</button>` + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((c) => `<button type="button" data-l="${c}" class="${mlLetter === c ? "on" : ""}" ${have.has(c) ? "" : 'style="opacity:.35"'}>${c}</button>`).join("");
   const cmp = { az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name), no: (a, b) => String(a.studentNo).localeCompare(String(b.studentNo), undefined, { numeric: true }) }[sort];
-  const rows = base.filter((r) => !mlLetter || lastInit(r) === mlLetter).sort(cmp), xf = colFields(), n = 11 + xf.length;
+  const rows = base.filter((r) => !mlLetter || lastInit(r) === mlLetter).sort(cmp), xf = colFields(), n = 12 + xf.length;
   $("mlCnt").textContent = `(${S.registry.length})`;
   $("mlCount").textContent = `${rows.length} of ${S.registry.length} registered students` + (rows.length > 12 ? " - scroll the list to see all" : "");
-  $("mlTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Voucher</th><th>Birthdate</th><th>Age</th><th>Gender</th><th>Contact</th>" + xf.map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th>Enrolled in</th><th></th></tr>" +
+  $("mlTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>School year</th><th>Grade</th><th>Voucher</th><th>Birthdate</th><th>Age</th><th>Gender</th><th>Contact</th>" + xf.map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th>Enrolled in</th><th></th></tr>" +
     (rows.slice(0, 3000).map((r) => { const e = latestEnrol(r);
-      return `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(r.gradeLevel || "")}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td><td>${esc(r.gender || "")}</td><td>${esc(r.contact || "")}</td>
+      return `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(r.schoolYear || "-")}</td><td>${esc(r.gradeLevel || "")}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td><td>${esc(r.gender || "")}</td><td>${esc(r.contact || "")}</td>
       ${xf.map((f) => `<td>${esc((r.extra || {})[f.id] ?? "")}</td>`).join("")}
       <td>${e ? esc(e.sectionName) + `<small>${esc(e.term)} ${esc(e.schoolYear || "")}</small>` : '<span class="badge warn">Not enrolled</span>'}</td>
       <td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-en="${esc(r.id)}">Enroll</button><button class="btn small" data-hi="${esc(r.id)}">History</button><button class="btn small danger" data-rm="${esc(r.id)}">Delete</button></td></tr>`; }).join("") ||
       `<tr><td colspan="${n}">No students found.</td></tr>`);
 }
 $("mlLetters").onclick = (e) => { const b = e.target.closest("[data-l]"); if (b) { mlLetter = b.dataset.l; renderMaster(); } };
-["mlQ", "mlGrade", "mlVoucher", "mlSort"].forEach((i) => ($(i).oninput = renderMaster));
+["mlQ", "mlGrade", "mlVoucher", "mlSort", "mlYear", "mlTerm"].forEach((i) => ($(i).oninput = renderMaster));
 $("mlTbl").onclick = (e) => run(async () => {
   const b = e.target.closest("[data-ed],[data-en],[data-rm],[data-hi]"); if (!b) return;
   const r = S.registry.find((x) => x.id === (b.dataset.ed || b.dataset.en || b.dataset.rm || b.dataset.hi)); if (!r) return;
   if (b.dataset.ed) return fillForm(r);
   if (b.dataset.hi) { show("history"); $("hiQ").value = `(${r.studentNo})`; renderHistory(); scrollTo({ top: 0 }); return; }
   if (b.dataset.en) { show("enroll", "enForm"); $("enQ").value = r.studentNo; renderEnrollPicker(r.id); return; }
-  if (r.examNo) { // an activated student account must be removed by the IT Admin
-    let acc = false; try { const s = await getDoc(doc(db, "students", r.examNo)); acc = s.exists() && !!s.data().accountUid; } catch { /* no record */ }
-    if (acc) return flash(`${r.name} already has an active account. Ask the IT Admin to remove the account first, then delete the registration.`);
-  }
-  if (!confirm(`Delete ${r.name} (${r.studentNo}) from the master list, with all of their enrollment records?`)) return;
-  const gone = S.enrollments.filter((x) => x.registryId === r.id);
+  await deleteStudent(r);
+});
+/** Registrar deletes a student (registered or enrolled). A login account that was already created is deleted too. */
+async function deleteStudent(r) {
+  const acc = await hasAccount(r), gone = S.enrollments.filter((x) => x.registryId === r.id);
+  if (!confirm(`Delete ${r.name} (${r.studentNo}) from the master list, with ${gone.length} enrollment record${gone.length === 1 ? "" : "s"}${acc ? " AND the student's login account" : ""}? This cannot be undone.`)) return;
+  if (acc) await callFn("registrarDropStudentAccount", { registryId: r.id });
   for (const en of gone) await deleteDoc(doc(db, "enrollmentRecords", en.id));
   if (r.examNo) await deleteDoc(doc(db, "students", r.examNo)).catch(() => {});
-  await deleteDoc(doc(db, "registry", r.id)); await logEvent("Deleted student", "student", `${r.name} (${r.studentNo})`, [], `Also removed ${gone.length} enrollment record${gone.length === 1 ? "" : "s"}`); await refresh(); flash(`${r.name} was deleted.`, true);
-});
+  await deleteDoc(doc(db, "registry", r.id));
+  await logEvent("Deleted student", "student", `${r.name} (${r.studentNo})`, [], `Also removed ${gone.length} enrollment record${gone.length === 1 ? "" : "s"}${acc ? " and the login account" : ""}`);
+  await refresh(); flash(`${r.name} was deleted${acc ? ", including the login account" : ""}.`, true);
+}
+async function hasAccount(r) {
+  if (!r.examNo) return false;
+  try { const s = await getDoc(doc(db, "students", r.examNo)); return s.exists() && !!s.data().accountUid; } catch { return false; }
+}
 /* ---------- Excel export (whole master list, one section, or every section) ---------- */
 const masterRow = (r) => ({ "Student ID No.": r.studentNo, LRN: r.lrn || "", "Voucher Type": r.voucherType || "", "Last Name": r.lastName, "First Name": r.firstName, "Middle Name": r.middleName || "", Suffix: r.suffix || "",
   Birthdate: r.birthday || "", Age: ageOf(r.birthday), Gender: r.gender || "", "Contact No.": r.contact || "", Address: r.address || "", "Father's Name": r.father || "", "Mother's Name": r.mother || "",
-  "Guardian Name": r.guardianName || "", "Guardian Contact No.": r.guardianContact || "", "Guardian Address": r.guardianAddress || "", "Grade Level": r.gradeLevel || "", ...Object.fromEntries(colFields().map((f) => [f.label, (r.extra || {})[f.id] ?? ""])) });
+  "Guardian Name": r.guardianName || "", "Guardian Contact No.": r.guardianContact || "", "Guardian Address": r.guardianAddress || "", "Grade Level": r.gradeLevel || "", "Registered School Year": r.schoolYear || "", ...Object.fromEntries(colFields().map((f) => [f.label, (r.extra || {})[f.id] ?? ""])) });
 const slug = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
 function saveXlsx(sheets, file) {
   if (!window.XLSX) return flash("The Excel writer did not load. Check your internet connection.");
@@ -266,9 +294,34 @@ function saveXlsx(sheets, file) {
 }
 $("mlXlsx").onclick = () => saveXlsx([{ name: "Master list", rows: S.registry.map(masterRow), header: Object.keys(masterRow({})) }], `master-list-${SID}.xlsx`);
 
+/** One Excel file from a list of { r: student, e: enrollment or null }.
+ *  mode "current": one sheet. "year": one sheet per school year. "term": one sheet per school year + quarter / term. */
+const exportRow = (r, e, terms, years) => { e = e || {}; return { ...masterRow(r), "Learning Modality": e.modality || "", Section: e.sectionName || "", "Cluster / strand": e.strand || "", "Term / quarter": (terms || []).join(", "), "School year (enrolled)": (years || []).join(", "),
+  Remark: e.remark || "", "Remark Date": e.remarkDate || "", "Remark Note": e.remarkNote || "", ...Object.fromEntries(S.fields.enroll.map((f) => [f.label, (e.extra || {})[f.id] ?? ""])) }; };
+function exportPairs(pairs, mode, file, baseName) {
+  const groups = new Map(), newer = (a, b) => !b || (a.schoolYear || "") > (b.schoolYear || "") || ((a.schoolYear || "") === (b.schoolYear || "") && termRank(a.term) > termRank(b.term));
+  pairs.forEach(({ r, e }) => {
+    const key = mode === "year" ? ((e ? e.schoolYear : r.schoolYear) || "No school year") : mode === "term" ? (e ? `${e.schoolYear || ""} ${e.term}`.trim() : "Not enrolled") : baseName;
+    if (!groups.has(key)) groups.set(key, new Map());
+    const g = groups.get(key), k = r.id + (mode === "term" && e ? "|" + e.id : ""), c = g.get(k);
+    if (!c) g.set(k, { r, e, terms: new Set(e ? [e.term] : []), years: new Set(e && e.schoolYear ? [e.schoolYear] : []) });
+    else if (e) { c.terms.add(e.term); if (e.schoolYear) c.years.add(e.schoolYear); if (newer(e, c.e)) c.e = e; }
+  });
+  const header = Object.keys(exportRow({}, null, [], []));
+  const sheets = [...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((k) => ({ name: k, header,
+    rows: [...groups.get(k).values()].sort((a, b) => String(a.r.name).localeCompare(b.r.name)).map((c) => exportRow(c.r, c.e, [...c.terms].sort((a, b) => termRank(a) - termRank(b)), [...c.years].sort())) }));
+  if (!sheets.length || !sheets.some((s) => s.rows.length)) return flash("There are no students to download with these filters.");
+  saveXlsx(sheets, file);
+}
+$("mlDl").onclick = () => {
+  const y = $("mlYear").value, t = $("mlTerm").value, pairs = [];
+  mlSorted().forEach((r) => { const ens = S.enrollments.filter((e) => e.registryId === r.id && (!y || e.schoolYear === y) && (!t || e.term === t)); if (ens.length) ens.forEach((e) => pairs.push({ r, e })); else pairs.push({ r, e: null }); });
+  exportPairs(pairs, $("mlDlMode").value, `registration-masterlist-${y || "all-years"}-${SID}.xlsx`, "Registration masterlist");
+};
+
 /* ======================= MASTER LIST PER SECTION ======================= */
 const NONE = "__none";
-const yearsList = () => [...new Set(S.enrollments.map((e) => e.schoolYear).filter(Boolean))].sort().reverse();
+const yearsList = () => [...new Set([...S.enrollments.map((e) => e.schoolYear), ...S.registry.map((r) => r.schoolYear)].filter(Boolean))].sort().reverse();
 const byGradeName = (a, b) => GRADES.indexOf(a.gradeLevel) - GRADES.indexOf(b.gradeLevel) || a.name.localeCompare(b.name);
 let msSel = "", msInit = false;
 const msF = () => ({ g: $("msGrade").value, y: $("msYear").value, t: $("msTerm").value });
@@ -280,7 +333,7 @@ function sectionRecords(id, f) {
     .sort((a, b) => a.r.name.localeCompare(b.r.name) || (a.e.schoolYear || "").localeCompare(b.e.schoolYear || "") || termRank(a.e.term) - termRank(b.e.term));
 }
 const secLabel = (id) => (id === NONE ? "Not enrolled in any section" : (S.sections.find((s) => s.id === id) || {}).name || "Section");
-const sectionRow = ({ r, e }, sec) => ({ ...masterRow(r), Section: sec ? sec.name : "", "Cluster / strand": sec ? sec.strand || "" : "", "Term / quarter": e ? e.term : "", "School year": e ? e.schoolYear || "" : "",
+const sectionRow = ({ r, e }, sec) => ({ ...masterRow(r), Section: sec ? sec.name : "", "Cluster / strand": sec ? sec.strand || "" : "", "Learning Modality": e ? e.modality || "" : "", Remark: e ? e.remark || "" : "", "Term / quarter": e ? e.term : "", "School year": e ? e.schoolYear || "" : "",
   ...Object.fromEntries(S.fields.enroll.map((f) => [f.label, e ? (e.extra || {})[f.id] ?? "" : ""])) });
 const sectionSheet = (id) => { const sec = S.sections.find((s) => s.id === id); return { name: secLabel(id), rows: sectionRecords(id, msF()).map((x) => sectionRow(x, sec)), header: Object.keys(sectionRow({ r: {} }, sec)) }; };
 function downloadSection(id) {
@@ -336,7 +389,7 @@ const emptyRow = (n, t) => `<tr><td colspan="${n}">${t}</td></tr>`;
 /** Everyone on the registration masterlist, with the newest enrollment inside the chosen school year / term (if any). */
 function dashScope() {
   const y = $("dsYear").value, t = $("dsTermSel").value, latest = new Map(), regMap = new Map(S.registry.map((r) => [r.id, r]));
-  const ens = S.enrollments.filter((e) => (!y || e.schoolYear === y) && (!t || e.term === t) && regMap.has(e.registryId));
+  const ens = S.enrollments.filter((e) => !e.remark && (!y || e.schoolYear === y) && (!t || e.term === t) && regMap.has(e.registryId)); // Transferred Out / Drop Out / Cancelled Enrolled are not counted
   [...ens].sort((a, b) => termRank(b.term) - termRank(a.term) || tsec(b) - tsec(a)).forEach((e) => { if (!latest.has(e.registryId)) latest.set(e.registryId, e); });
   const rows = S.registry.map((r) => { const e = latest.get(r.id) || null; return { r, e, grade: (e && e.gradeLevel) || r.gradeLevel || NOGRADE }; });
   return { y, t, ens, regMap, rows, enrolled: rows.filter((x) => x.e) };
@@ -351,6 +404,7 @@ function renderDash() {
   const { y, t, ens, regMap, rows, enrolled } = dashScope(), notEn = rows.length - enrolled.length;
   $("dsCtx").textContent = `Showing: school year ${y || "all"}, ${t || "all terms / quarters"}.`;
   $("dsCards").innerHTML = [["Registered students", rows.length], ["Total enrolled", enrolled.length], ["Total not enrolled", notEn, "warn"], ["Enrollment rate", pc(enrolled.length, rows.length)],
+    ["Transferred out / dropped out / cancelled", new Set(S.enrollments.filter((e) => e.remark && (!y || e.schoolYear === y) && (!t || e.term === t) && regMap.has(e.registryId)).map((e) => e.registryId)).size, "warn"],
     ["Enrolled - male", enrolled.filter(isM).length], ["Enrolled - female", enrolled.filter(isF).length]].map(([l, v, c]) => `<div class="stat ${c || ""}"><b>${v}</b><span>${l}</span></div>`).join("");
   // per grade level
   const gs = [...GRADES, NOGRADE].filter((g) => rows.some((x) => x.grade === g));
@@ -363,9 +417,13 @@ function renderDash() {
   $("dsStrand").innerHTML = hdr(["Cluster / strand", "Enrolled", "Male", "Female"]) + (order.length ? order.map((k) => sl(k, sm.get(k))).join("") + sl("All clusters / strands", enrolled, "tot") : emptyRow(4, "Nobody is enrolled for this selection."));
   // per term / quarter (always for the chosen school year)
   $("dsTermTbl").innerHTML = hdr(["Term / quarter", "Enrolled", "Not enrolled", "% enrolled"]) + TERMS.map((tm) => {
-    const n = new Set(S.enrollments.filter((e) => (!y || e.schoolYear === y) && e.term === tm && regMap.has(e.registryId)).map((e) => e.registryId)).size;
+    const n = new Set(S.enrollments.filter((e) => !e.remark && (!y || e.schoolYear === y) && e.term === tm && regMap.has(e.registryId)).map((e) => e.registryId)).size;
     return rowHtml([esc(tm), n, S.registry.length - n, `${pc(n, S.registry.length)} ${bar(n, S.registry.length)}`]);
   }).join("");
+  // per learning modality
+  const mm = new Map(); enrolled.forEach((x) => { const k = x.e.modality || "Not set"; if (!mm.has(k)) mm.set(k, []); mm.get(k).push(x); });
+  const mOrder = [...MODALITIES, "Not set"].filter((k) => mm.has(k)), ml = (k, a, cls) => rowHtml([esc(k), a.length, a.filter(isM).length, a.filter(isF).length], cls);
+  $("dsModality").innerHTML = hdr(["Learning modality", "Enrolled", "Male", "Female"]) + (mOrder.length ? mOrder.map((k) => ml(k, mm.get(k))).join("") + ml("All modalities", enrolled, "tot") : emptyRow(4, "Nobody is enrolled for this selection."));
   // male / female
   $("dsGenReg").innerHTML = genderTable(rows); $("dsGenEn").innerHTML = genderTable(enrolled);
   const secMap = new Map(); ens.forEach((e) => { if (!secMap.has(e.sectionId)) secMap.set(e.sectionId, new Map()); secMap.get(e.sectionId).set(e.registryId, { r: regMap.get(e.registryId) }); });
@@ -378,12 +436,21 @@ function renderDash() {
 ["dsYear", "dsTermSel"].forEach((i) => ($(i).onchange = renderDash));
 
 /* ======================= ENROLLED MASTERLIST (separate from the registration masterlist) ======================= */
-function enrolledRecords() {
-  const q = $("elQ").value.trim().toLowerCase(), y = $("elYear").value, t = $("elTerm").value, g = $("elGrade").value, st = $("elStrand").value, sc = $("elSection").value, v = $("elVoucher").value, sort = $("elSort").value;
-  const regMap = new Map(S.registry.map((r) => [r.id, r])), by = new Map();
+/** Every enrollment record that passes the filters, joined to its student. */
+function enrolledPairs() {
+  const q = $("elQ").value.trim().toLowerCase(), y = $("elYear").value, t = $("elTerm").value, g = $("elGrade").value, st = $("elStrand").value, sc = $("elSection").value, v = $("elVoucher").value, md = $("elModality").value, rm = $("elRemark").value;
+  const regMap = new Map(S.registry.map((r) => [r.id, r])), out = [];
   S.enrollments.forEach((e) => {
-    if ((y && e.schoolYear !== y) || (t && e.term !== t) || (g && e.gradeLevel !== g) || (st && (e.strand || "") !== st) || (sc && e.sectionId !== sc)) return;
+    if ((y && e.schoolYear !== y) || (t && e.term !== t) || (g && e.gradeLevel !== g) || (st && (e.strand || "") !== st) || (sc && e.sectionId !== sc) || (md && (e.modality || "") !== md)) return;
+    if (rm === "__none" ? e.remark : rm && e.remark !== rm) return;
     const r = regMap.get(e.registryId); if (!r || (v && (r.voucherType || "") !== v) || (q && ![r.studentNo, r.lrn, r.name].join(" ").toLowerCase().includes(q))) return;
+    out.push({ r, e });
+  });
+  return out;
+}
+function enrolledRecords() {
+  const sort = $("elSort").value, by = new Map();
+  enrolledPairs().forEach(({ r, e }) => {
     const cur = by.get(r.id);
     if (!cur) by.set(r.id, { r, e, terms: new Set([e.term]), years: new Set([e.schoolYear || ""]) });
     else { cur.terms.add(e.term); cur.years.add(e.schoolYear || "");
@@ -394,33 +461,60 @@ function enrolledRecords() {
 }
 function renderEnList() {
   if (!elInit) { elInit = true; $("elYear").value = schoolYearNow(); }
-  const rows = enrolledRecords(), xf = colFields(), ef = S.fields.enroll, n = 12 + xf.length + ef.length;
-  $("elCnt").textContent = `(${new Set(S.enrollments.map((e) => e.registryId)).size})`;
+  const rows = enrolledRecords(), xf = colFields(), ef = S.fields.enroll, n = 14 + xf.length + ef.length;
+  $("elCnt").textContent = `(${new Set(S.enrollments.filter((e) => !e.remark).map((e) => e.registryId)).size})`;
   $("elCount").textContent = `${rows.length} enrolled student${rows.length === 1 ? "" : "s"} - ${rows.filter(isM).length} male, ${rows.filter(isF).length} female` + (rows.length > 12 ? " - scroll the list to see all" : "");
-  $("elTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Cluster / strand</th><th>Section</th><th>Term / quarter</th><th>School year</th><th>Voucher</th><th>Gender</th><th>Birthdate</th><th>Age</th>" +
+  $("elTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Cluster / strand</th><th>Section</th><th>Learning modality</th><th>Term / quarter</th><th>School year</th><th>Voucher</th><th>Gender</th><th>Birthdate</th><th>Age</th><th>Remark</th>" +
     [...xf, ...ef].map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th></th></tr>" +
-    (rows.slice(0, 3000).map(({ r, e, terms, years }) => `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(e.gradeLevel || r.gradeLevel || "")}</td><td>${esc(e.strand || "-")}</td><td>${esc(e.sectionName || "")}</td>` +
+    (rows.slice(0, 3000).map(({ r, e, terms, years }) => `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(e.gradeLevel || r.gradeLevel || "")}</td><td>${esc(e.strand || "-")}</td><td>${esc(e.sectionName || "")}</td><td>${esc(e.modality || "-")}</td>` +
       `<td>${esc(terms.join(", "))}</td><td>${esc(years.join(", "))}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(r.gender || "")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td>` +
+      `<td>${e.remark ? `<span class="badge warn">${esc(e.remark)}</span>${e.remarkDate ? `<small>${esc(bd(e.remarkDate))}</small>` : ""}` : "-"}</td>` +
       xf.map((f) => `<td>${esc((r.extra || {})[f.id] ?? "")}</td>`).join("") + ef.map((f) => `<td>${esc((e.extra || {})[f.id] ?? "")}</td>`).join("") +
-      `<td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-hi="${esc(r.id)}">History</button></td></tr>`).join("") || emptyRow(n, "No enrolled students found."));
+      `<td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-rk="${esc(r.id)}">Remark</button><button class="btn small" data-hi="${esc(r.id)}">History</button><button class="btn small danger" data-rm="${esc(r.id)}">Delete</button></td></tr>`).join("") || emptyRow(n, "No enrolled students found."));
 }
-["elQ", "elYear", "elTerm", "elGrade", "elStrand", "elSection", "elVoucher", "elSort"].forEach((i) => ($(i).oninput = renderEnList));
-$("elTbl").onclick = (e) => {
-  const b = e.target.closest("[data-ed],[data-hi]"); if (!b) return;
-  const r = S.registry.find((x) => x.id === (b.dataset.ed || b.dataset.hi)); if (!r) return;
+["elQ", "elYear", "elTerm", "elGrade", "elStrand", "elSection", "elVoucher", "elSort", "elModality", "elRemark"].forEach((i) => ($(i).oninput = renderEnList));
+$("elTbl").onclick = (e) => run(async () => {
+  const b = e.target.closest("[data-ed],[data-hi],[data-rk],[data-rm]"); if (!b) return;
+  const r = S.registry.find((x) => x.id === (b.dataset.ed || b.dataset.hi || b.dataset.rk || b.dataset.rm)); if (!r) return;
   if (b.dataset.ed) return fillForm(r);
+  if (b.dataset.rk) return openRemark(r);
+  if (b.dataset.rm) return deleteStudent(r);
   show("history"); $("hiQ").value = `(${r.studentNo})`; renderHistory(); scrollTo({ top: 0 });
-};
+});
 $("elXlsx").onclick = () => {
-  const ef = S.fields.enroll, list = enrolledRecords();
-  if (!list.length) return flash("There are no enrolled students to download with these filters.");
-  const rowOf = ({ r, e, terms, years }) => ({ ...masterRow(r), "Grade Level": e.gradeLevel || r.gradeLevel || "", "Cluster / strand": e.strand || "", Section: e.sectionName || "", "Term / quarter": terms.join(", "), "School year": years.join(", "),
-    ...Object.fromEntries(ef.map((f) => [f.label, (e.extra || {})[f.id] ?? ""])) });
-  saveXlsx([{ name: "Enrolled masterlist", rows: list.map(rowOf), header: Object.keys(rowOf({ r: {}, e: {}, terms: [], years: [] })) }], `enrolled-masterlist-${$("elYear").value || "all"}-${SID}.xlsx`);
+  const pairs = enrolledPairs(); if (!pairs.length) return flash("There are no enrolled students to download with these filters.");
+  exportPairs(pairs, $("elDlMode").value, `enrolled-masterlist-${$("elYear").value || "all-years"}-${SID}.xlsx`, "Enrolled masterlist");
 };
 
+/* ---------- remark (Transferred Out / Drop Out / Cancelled Enrolled) ---------- */
+let rmTarget = null;
+async function openRemark(r) {
+  const mine = S.enrollments.filter((e) => e.registryId === r.id); if (!mine.length) return flash("This student has no enrollment record to put a remark on.");
+  const year = [...mine].sort((a, b) => (b.schoolYear || "").localeCompare(a.schoolYear || "") || termRank(b.term) - termRank(a.term))[0].schoolYear || "";
+  const recs = mine.filter((e) => (e.schoolYear || "") === year), cur = recs.find((e) => e.remark) || {}, acc = await hasAccount(r);
+  rmTarget = { r, year, recs, acc };
+  $("rmInfo").innerHTML = [["Student", r.name], ["Student ID No.", r.studentNo], ["School year", year || "-"], ["Enrolled in", [...new Set(recs.map((e) => e.sectionName))].join(", ")], ["Current remark", cur.remark || "- none -"]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+  $("rmSel").value = cur.remark || REMARKS[0]; $("rmDate").value = cur.remarkDate || localDate(); $("rmNote").value = cur.remarkNote || "";
+  $("rmDrop").checked = acc; $("rmDrop").disabled = !acc;
+  $("rmAcc").textContent = acc ? "This student already has a login account." : "This student has no login account, so there is nothing to delete.";
+  $("rmNone").hidden = true; $("rmBox").hidden = false; show("enrolled", "elRemark"); scrollTo({ top: 0, behavior: "smooth" });
+}
+const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+$("rmCancel").onclick = () => { rmTarget = null; $("rmBox").hidden = true; $("rmNone").hidden = false; show("enrolled", "elList"); };
+$("rmSave").onclick = () => run(async () => {
+  const t = rmTarget; if (!t) return flash("Choose a student first (Remark button in the enrolled list).");
+  const remark = $("rmSel").value, note = $("rmNote").value.trim(), date = $("rmDate").value || localDate(), dropAcc = remark && t.acc && $("rmDrop").checked;
+  if (remark && !confirm(`Set "${remark}" for ${t.r.name} (${t.year})?${dropAcc ? "\n\nThe student's login account will be DELETED." : ""}`)) return;
+  if (dropAcc) await callFn("registrarDropStudentAccount", { registryId: t.r.id });
+  const patchRec = remark ? { remark, remarkDate: date, remarkNote: note, remarkBy: profile.displayName || "", updatedAt: serverTimestamp() } : { remark: deleteField(), remarkDate: deleteField(), remarkNote: deleteField(), remarkBy: deleteField(), updatedAt: serverTimestamp() };
+  for (const e of t.recs) await updateDoc(doc(db, "enrollmentRecords", e.id), patchRec);
+  await logEvent(remark ? "Set remark" : "Cleared remark", "enrollment", `${t.r.name} (${t.r.studentNo})`, [{ f: "Remark", from: (t.recs.find((e) => e.remark) || {}).remark || "", to: remark }], `${t.year}${note ? " - " + note : ""}${dropAcc ? " - login account deleted" : ""}`);
+  rmTarget = null; $("rmBox").hidden = true; $("rmNone").hidden = false; await refresh(); show("enrolled", "elList");
+  flash(remark ? `${t.r.name}: ${remark}.${dropAcc ? " The login account was deleted." : ""}` : `The remark of ${t.r.name} was cleared.`, true);
+});
+
 /* ======================= HISTORY LOG ======================= */
-const ACTIONS = ["Registered student", "Edited student", "Deleted student", "Enrolled student", "Removed from section", "Added section", "Changed adviser", "Deleted section", "Imported list", "Changed settings"];
+const ACTIONS = ["Registered student", "Edited student", "Deleted student", "Set remark", "Cleared remark", "Enrolled student", "Removed from section", "Added section", "Changed adviser", "Deleted section", "Imported list", "Changed settings"];
 const atsec = (l) => l?.at?.seconds || 0;
 const whenOf = (l) => (atsec(l) ? new Date(atsec(l) * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "just now");
 S.log = []; S.logLoaded = false;
@@ -541,10 +635,10 @@ function renderEnrollPicker(select) {
   keep("enStu", rows.map((r) => `<option value="${esc(r.id)}">${esc(r.studentNo)} - ${esc(r.name)}${r.lrn ? " (LRN " + esc(r.lrn) + ")" : ""}</option>`).join("") || `<option value="">No registered student found</option>`);
   if (select && rows.some((r) => r.id === select)) $("enStu").value = select;
   const r = S.registry.find((x) => x.id === $("enStu").value);
-  if (r && r.id !== picked) { picked = r.id; if (r.gradeLevel) $("enGrade").value = r.gradeLevel; }
+  if (r && r.id !== picked) { picked = r.id; if (r.gradeLevel) $("enGrade").value = r.gradeLevel; if (r.schoolYear) $("enYear").value = r.schoolYear; }
   const examNo = r ? (r.examNo || r.lrn || r.studentNo) : "";
   $("enInfo").hidden = !r;
-  if (r) $("enInfo").innerHTML = [["Name", r.name], ["Student ID No.", r.studentNo], ["LRN", r.lrn || "- (none yet)"], ["Birthdate", bd(r.birthday)], ["Age", ageOf(r.birthday)], ["Gender", r.gender || "-"], ["Voucher", r.voucherType || "-"],
+  if (r) $("enInfo").innerHTML = [["Name", r.name], ["Student ID No.", r.studentNo], ["School year", r.schoolYear || "-"], ["LRN", r.lrn || "- (none yet)"], ["Birthdate", bd(r.birthday)], ["Age", ageOf(r.birthday)], ["Gender", r.gender || "-"], ["Voucher", r.voucherType || "-"],
     ["Exam ID No. (login)", examNo + (r.lrn || r.examNo ? "" : " (Student ID, until an LRN is available)")]].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
   const g = $("enGrade").value, st = $("enStrand").value, secs = S.sections.filter((s) => s.gradeLevel === g && (s.strand || "") === st);
   keep("enSection", secs.map((s) => `<option value="${esc(s.id)}">${esc(s.sectionName || s.name)} - ${esc(s.adviserName || "")}</option>`).join("") || `<option value="">No section for this grade / strand</option>`);
@@ -557,7 +651,8 @@ function ctx() {
   const section = S.sections.find((s) => s.id === $("enSection").value), year = $("enYear").value.trim();
   if (!section) throw new Error("Choose a section. If the list is empty, add the section first under Sections & advisers.");
   if (!/^\d{4}-\d{4}$/.test(year)) throw new Error("Enter the school year like 2026-2027.");
-  return { section, gradeLevel: $("enGrade").value, term: $("enTerm").value, schoolYear: year, strand: $("enStrand").value, extra: readExtras("enExtra") };
+  if (!$("enModality").value) throw new Error("Choose the learning modality.");
+  return { section, gradeLevel: $("enGrade").value, term: $("enTerm").value, schoolYear: year, strand: $("enStrand").value, modality: $("enModality").value, extra: readExtras("enExtra") };
 }
 /** One enrollment: the student's teacher-visible record (under the section's adviser), the enrollment record and the master list, in ONE all-or-nothing write.
  *  Exam ID No. = LRN, or the Student ID No. if there is no LRN yet; once set it never changes. */
@@ -569,7 +664,7 @@ async function enrollOne(r, c, rowExtra) {
     middleInitial: (r.middleName || "").slice(0, 1).toUpperCase(), name: r.name, birthday: r.birthday || "", gender: r.gender || "", lrn: r.lrn || "", studentNo: r.studentNo, registryId: r.id,
     gradeLevel: c.gradeLevel, strand: c.strand || "", updatedAt: serverTimestamp(), ...(r.examNo ? {} : { createdAt: serverTimestamp() }) }, { merge: true });
   b.set(doc(db, "enrollmentRecords", eid), { schoolId: SID, registryId: r.id, studentNo: r.studentNo, lrn: r.lrn || "", examNo, name: r.name, birthday: r.birthday || "", gender: r.gender || "",
-    gradeLevel: c.gradeLevel, term: c.term, schoolYear: c.schoolYear, strand: c.strand || "", sectionId: sec.id, sectionName: sec.name, adviserUid: sec.ownerUid, adviserName: sec.adviserName || "",
+    gradeLevel: c.gradeLevel, term: c.term, schoolYear: c.schoolYear, strand: c.strand || "", modality: c.modality || "", sectionId: sec.id, sectionName: sec.name, adviserUid: sec.ownerUid, adviserName: sec.adviserName || "",
     extra: { ...(c.extra || {}), ...Object.fromEntries(Object.entries(rowExtra || {}).filter(([, v]) => v)) }, createdBy: user.uid, createdAt: serverTimestamp() }, { merge: true });
   b.update(doc(db, "registry", r.id), { examNo, gradeLevel: c.gradeLevel, updatedAt: serverTimestamp() });
   try { await b.commit(); }
@@ -578,7 +673,7 @@ async function enrollOne(r, c, rowExtra) {
 }
 $("enSave").onclick = () => run(async () => {
   const r = S.registry.find((x) => x.id === $("enStu").value); if (!r) return flash("Find and choose a registered student first.");
-  const c = ctx(); await enrollOne(r, c); await logEvent("Enrolled student", "enrollment", `${r.name} (${r.studentNo})`, [], `${c.section.name} - ${c.term} - ${c.schoolYear}`); await refresh();
+  const c = ctx(); await enrollOne(r, c); await logEvent("Enrolled student", "enrollment", `${r.name} (${r.studentNo})`, [], `${c.section.name} - ${c.term} - ${c.schoolYear} - ${c.modality}`); await refresh();
   flash(`${r.name} is enrolled in ${c.section.name} (${c.term}, ${c.schoolYear}). Adviser ${c.section.adviserName || ""} can now activate the account. Exam ID No.: ${r.examNo}.`, 1);
 });
 function renderEnrolled() {
@@ -586,8 +681,8 @@ function renderEnrolled() {
   const list = S.enrollments.filter((e) => e.sectionId === sec && e.term === term && e.schoolYear === year).sort((a, b) => a.name.localeCompare(b.name));
   const cs = S.sections.find((s) => s.id === sec), ctxText = cs ? `${cs.name} - ${term} - ${year}` : "no section chosen yet";
   document.querySelectorAll(".enCtx").forEach((el) => (el.textContent = ctxText)); $("enCnt").textContent = `(${list.length})`;
-  $("enTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Birthdate</th><th>Age</th><th>Gender</th>" + S.fields.enroll.map((f) => `<th>${esc(f.label)}</th>`).join("") + "</tr>" +
-    (list.map((e) => `<tr><td>${esc(e.studentNo)}</td><td>${esc(e.lrn || "-")}</td><td>${esc(e.name)}</td><td>${esc(bd(e.birthday))}</td><td>${ageOf(e.birthday)}</td><td>${esc(e.gender || "")}</td>${S.fields.enroll.map((f) => `<td>${esc((e.extra || {})[f.id] ?? "")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${6 + S.fields.enroll.length}">Nobody enrolled yet for the chosen section, term and school year.</td></tr>`);
+  $("enTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Birthdate</th><th>Age</th><th>Gender</th><th>Learning modality</th><th>Remark</th>" + S.fields.enroll.map((f) => `<th>${esc(f.label)}</th>`).join("") + "</tr>" +
+    (list.map((e) => `<tr><td>${esc(e.studentNo)}</td><td>${esc(e.lrn || "-")}</td><td>${esc(e.name)}</td><td>${esc(bd(e.birthday))}</td><td>${ageOf(e.birthday)}</td><td>${esc(e.gender || "")}</td><td>${esc(e.modality || "-")}</td><td>${esc(e.remark || "-")}</td>${S.fields.enroll.map((f) => `<td>${esc((e.extra || {})[f.id] ?? "")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${8 + S.fields.enroll.length}">Nobody enrolled yet for the chosen section, term and school year.</td></tr>`);
 }
 async function unenroll(id) {
   const e = S.enrollments.find((x) => x.id === id); if (!e) return;

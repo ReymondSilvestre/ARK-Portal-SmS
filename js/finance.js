@@ -1,4 +1,4 @@
-import { requireRole, logout, db, esc, friendlyError, applyBranding } from "./auth.js";
+import { requireRole, logout, db, esc, friendlyError, applyBranding, ageOf } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, writeBatch, serverTimestamp }
   from "./db.js";
 import { TERMS, termRank } from "./omr.js";
@@ -128,7 +128,7 @@ function render() {
   keep("fsGroup", groups.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join(""));
   keep("fsCopy", options(Object.keys(S.fees).filter((y) => y !== $("fnYear").value).sort().reverse(), "- choose a school year -"));
   if (!$("fpDate").value) $("fpDate").value = localDate();
-  renderTypes(); renderFees(); renderPicker(); renderDash(); renderTx(); renderBal(); renderCalc();
+  renderTypes(); renderFees(); renderPicker(); renderDash(); renderTx(); renderBal(); renderCalc(); renderEm();
 }
 $("fnYear").onchange = () => run(async () => { render(); await syncAccounts(); });
 
@@ -282,17 +282,38 @@ $("tyList").onclick = (e) => run(async () => {
   if (!confirm(`Remove "${t}"? Payments already recorded keep it, but its fee amounts are no longer counted in the total to pay.`)) return;
   S.types = S.types.filter((x) => x !== t); await saveSettings(); await logEvent("Changed settings", "Payment transactions", "Removed " + t); render(); await syncAccounts();
 });
+const FS_ALL = "__all";
+let fsDraft = {}, fsKey = ""; // amounts typed but not saved yet: { grade: { transaction: "text" } }
+const fsVal = (cur, g, t) => (fsDraft[g] && fsDraft[g][t] !== undefined ? fsDraft[g][t] : cur[g] && cur[g][t] !== undefined ? cur[g][t] : "");
 function renderFees() {
   if ($("fsTbl").contains(document.activeElement) && document.activeElement.matches("input")) return; // do not disturb typing
-  const y = $("fnYear").value, cur = ((S.fees[y] || {})[$("fsGroup").value || ALL]) || {};
+  const y = $("fnYear").value, gk = $("fsGroup").value || ALL, cur = ((S.fees[y] || {})[gk]) || {};
+  if (y + "|" + gk !== fsKey) { fsKey = y + "|" + gk; fsDraft = {}; }
+  keep("fsGrade", `<option value="${FS_ALL}">All grade levels (overview)</option>` + GRADES.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join(""));
+  if (!$("fsGrade").value) $("fsGrade").value = FS_ALL;
+  const gsel = $("fsGrade").value, input = (g, t) => `<input type="number" min="0" step="0.01" inputmode="decimal" data-g="${esc(g)}" data-t="${esc(t)}" value="${esc(fsVal(cur, g, t))}" aria-label="${esc(g)} ${esc(t)}">`;
   $("fsYear").textContent = "school year " + y;
-  $("fsTbl").innerHTML = hdr(["Grade level", ...S.types.map((t) => [esc(t)])]) + GRADES.map((g) => `<tr>${cell(esc(g))}` + S.types.map((t) => `<td class="num"><input type="number" min="0" step="0.01" inputmode="decimal" data-g="${esc(g)}" data-t="${esc(t)}" value="${cur[g] && cur[g][t] !== undefined ? cur[g][t] : ""}" aria-label="${esc(g)} ${esc(t)}"></td>`).join("") + "</tr>").join("");
+  if (gsel === FS_ALL) $("fsTbl").innerHTML = hdr(["Grade level", ...S.types.map((t) => [esc(t)])]) + GRADES.map((g) => `<tr>${cell(esc(g))}` + S.types.map((t) => `<td class="num">${input(g, t)}</td>`).join("") + "</tr>").join("");
+  else {
+    const tot = sum(S.types, (t) => Number(fsVal(cur, gsel, t)) || 0);
+    $("fsTbl").innerHTML = hdr([esc(gsel) + " - payment transaction", ["Amount (PHP)"]]) + S.types.map((t) => `<tr>${cell(esc(t))}<td class="num">${input(gsel, t)}</td></tr>`).join("") +
+      `<tr class="tot">${cell("Total for " + esc(gsel))}<td class="num" id="fsTot"><b>${money(tot)}</b></td></tr>`;
+  }
 }
+$("fsTbl").addEventListener("input", (e) => { // keep what was typed while the grade level / group is switched
+  const i = e.target.closest("input[data-g]"); if (!i) return;
+  (fsDraft[i.dataset.g] = fsDraft[i.dataset.g] || {})[i.dataset.t] = i.value;
+  const tot = $("fsTot"); if (tot) { const g = $("fsGrade").value; tot.innerHTML = `<b>${money(sum(S.types, (t) => Number((fsDraft[g] || {})[t] !== undefined ? fsDraft[g][t] : (((S.fees[$("fnYear").value] || {})[$("fsGroup").value || ALL] || {})[g] || {})[t]) || 0))}</b>`; }
+});
 $("fsGroup").onchange = () => renderFees();
+$("fsGrade").onchange = () => renderFees();
 const groupLabel = () => $("fsGroup").selectedOptions[0]?.textContent || "";
 $("fsSave").onclick = () => run(async () => {
-  const y = $("fnYear").value, gk = $("fsGroup").value || ALL, next = {};
-  $("fsTbl").querySelectorAll("input").forEach((i) => { if (i.value.trim() === "") return; const n = r2(i.value); if (n < 0) return; (next[i.dataset.g] = next[i.dataset.g] || {})[i.dataset.t] = n; });
+  const y = $("fnYear").value, gk = $("fsGroup").value || ALL, next = JSON.parse(JSON.stringify((S.fees[y] || {})[gk] || {}));
+  Object.entries(fsDraft).forEach(([g, ts]) => Object.entries(ts).forEach(([t, v]) => { // typed amounts of every grade level, not only the one on screen
+    if (String(v).trim() === "") { if (next[g]) { delete next[g][t]; if (!Object.keys(next[g]).length) delete next[g]; } return; }
+    const n = r2(v); if (n < 0) return; (next[g] = next[g] || {})[t] = n; }));
+  fsDraft = {};
   S.fees[y] = { ...(S.fees[y] || {}), [gk]: next }; if (!Object.keys(next).length) delete S.fees[y][gk]; if (!Object.keys(S.fees[y]).length) delete S.fees[y];
   await saveSettings(); await logEvent("Changed settings", `Fee schedule ${y}`, `Saved ${groupLabel()}`); document.activeElement.blur(); render(); await syncAccounts();
   flash(`Fee schedule saved for ${groupLabel()} (${y}). Student balances were updated.`, true);
@@ -300,7 +321,7 @@ $("fsSave").onclick = () => run(async () => {
 $("fsClear").onclick = () => run(async () => {
   const y = $("fnYear").value, gk = $("fsGroup").value || ALL; if (!(S.fees[y] || {})[gk]) return flash("Nothing to clear for this group.");
   if (!confirm(`Clear every amount of ${groupLabel()} for ${y}?`)) return;
-  delete S.fees[y][gk]; if (!Object.keys(S.fees[y]).length) delete S.fees[y];
+  delete S.fees[y][gk]; if (!Object.keys(S.fees[y]).length) delete S.fees[y]; fsDraft = {};
   await saveSettings(); await logEvent("Changed settings", `Fee schedule ${y}`, `Cleared ${groupLabel()}`); render(); await syncAccounts();
 });
 $("fsCopyGo").onclick = () => run(async () => {
@@ -308,6 +329,60 @@ $("fsCopyGo").onclick = () => run(async () => {
   if (S.fees[y] && !confirm(`${y} already has a fee schedule. Replace it with the one of ${src}?`)) return;
   S.fees[y] = JSON.parse(JSON.stringify(S.fees[src])); await saveSettings(); await logEvent("Changed settings", `Fee schedule ${y}`, `Copied from ${src}`); render(); await syncAccounts(); flash(`Copied the fee schedule of ${src} to ${y}.`, true);
 });
+
+/* ======================= ENROLLED MASTERLIST (view only) ======================= */
+const MODALITIES = ["Face to Face", "Blended", "Modular", "Internal Agreement"], REMARKS = ["Transferred Out", "Drop Out", "Cancelled Enrolled"];
+const emYears = () => [...new Set(S.enrollments.map((e) => e.schoolYear).filter(Boolean))].sort().reverse();
+let emInit = false;
+function emPairs() {
+  const q = $("emQ").value.trim().toLowerCase(), y = $("emYear").value, t = $("emTerm").value, g = $("emGrade").value, sc = $("emSection").value, v = $("emVoucher").value, md = $("emModality").value, rm = $("emRemark").value;
+  const regMap = new Map(S.registry.map((r) => [r.id, r])), out = [];
+  S.enrollments.forEach((e) => {
+    if ((y && e.schoolYear !== y) || (t && e.term !== t) || (g && e.gradeLevel !== g) || (sc && e.sectionName !== sc) || (md && (e.modality || "") !== md)) return;
+    if (rm === "__none" ? e.remark : rm && e.remark !== rm) return;
+    const r = regMap.get(e.registryId); if (!r) return;
+    if ((v && (v === "No voucher" ? r.voucherType : (r.voucherType || "") !== v)) || (q && ![r.studentNo, r.lrn, r.name].join(" ").toLowerCase().includes(q))) return;
+    out.push({ r, e });
+  });
+  return out;
+}
+function emRecords() {
+  const by = new Map(), sort = $("emSort").value;
+  emPairs().forEach(({ r, e }) => {
+    const c = by.get(r.id);
+    if (!c) by.set(r.id, { r, e, terms: new Set([e.term]), years: new Set([e.schoolYear || ""]) });
+    else { c.terms.add(e.term); c.years.add(e.schoolYear || ""); if ((e.schoolYear || "") > (c.e.schoolYear || "") || ((e.schoolYear || "") === (c.e.schoolYear || "") && termRank(e.term) > termRank(c.e.term))) c.e = e; }
+  });
+  const cmp = { az: (a, b) => a.r.name.localeCompare(b.r.name), za: (a, b) => b.r.name.localeCompare(a.r.name), no: (a, b) => String(a.r.studentNo).localeCompare(String(b.r.studentNo), undefined, { numeric: true }) }[sort];
+  return [...by.values()].map((x) => ({ ...x, terms: [...x.terms].sort((a, b) => termRank(a) - termRank(b)), years: [...x.years].filter(Boolean).sort() })).sort(cmp);
+}
+function renderEm() {
+  keep("emYear", options(emYears(), "All school years")); keep("emTerm", options(TERMS, "All terms / quarters")); keep("emGrade", options(GRADES, "All grade levels"));
+  keep("emSection", options([...new Set(S.enrollments.map((e) => e.sectionName).filter(Boolean))].sort(), "All sections")); keep("emVoucher", options([...allVouchers(), "No voucher"], "All voucher types"));
+  keep("emModality", options(MODALITIES, "All learning modalities")); keep("emRemark", `<option value="">All students</option><option value="__none">No remark (active)</option>` + REMARKS.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join(""));
+  if (!emInit && S.enrollments.length) { emInit = true; const ys = emYears(); $("emYear").value = ys.includes(schoolYearNow()) ? schoolYearNow() : ys[0] || ""; }
+  const rows = emRecords(), m = rows.filter((x) => x.r.gender === "Male").length, f = rows.filter((x) => x.r.gender === "Female").length;
+  $("emCnt").textContent = `(${new Set(S.enrollments.map((e) => e.registryId)).size})`;
+  $("emCount").textContent = `${rows.length} enrolled student${rows.length === 1 ? "" : "s"} - ${m} male, ${f} female` + (rows.length > 12 ? " - scroll the list to see all" : "");
+  $("emTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Cluster / strand</th><th>Section</th><th>Learning modality</th><th>Term / quarter</th><th>School year</th><th>Voucher</th><th>Gender</th><th>Age</th><th>Remark</th></tr>" +
+    (rows.slice(0, 3000).map(({ r, e, terms, years }) => `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(e.gradeLevel || r.gradeLevel || "")}</td><td>${esc(e.strand || "-")}</td><td>${esc(e.sectionName || "")}</td><td>${esc(e.modality || "-")}</td><td>${esc(terms.join(", "))}</td><td>${esc(years.join(", "))}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(r.gender || "")}</td><td>${ageOf(r.birthday)}</td><td>${e.remark ? `<span class="badge part">${esc(e.remark)}</span>` : "-"}</td></tr>`).join("") || `<tr><td colspan="13">No enrolled students found.</td></tr>`);
+}
+["emQ", "emYear", "emTerm", "emGrade", "emSection", "emVoucher", "emModality", "emRemark", "emSort"].forEach((i) => ($(i).oninput = renderEm));
+$("emClear").onclick = () => { ["emQ", "emYear", "emTerm", "emGrade", "emSection", "emVoucher", "emModality", "emRemark"].forEach((i) => ($(i).value = "")); renderEm(); };
+const emRow = (r, e, terms, years) => ({ "Student ID No.": r.studentNo, LRN: r.lrn || "", "Last Name": r.lastName || "", "First Name": r.firstName || "", "Middle Name": r.middleName || "", Name: r.name, "Grade Level": e.gradeLevel || r.gradeLevel || "", "Cluster / strand": e.strand || "", Section: e.sectionName || "",
+  "Learning Modality": e.modality || "", "Term / quarter": terms.join(", "), "School Year": years.join(", "), "Voucher Type": r.voucherType || "", Gender: r.gender || "", Birthdate: r.birthday || "", Age: ageOf(r.birthday), Remark: e.remark || "", "Remark Date": e.remarkDate || "" });
+$("emXlsx").onclick = () => {
+  const pairs = emPairs(), mode = $("emDlMode").value; if (!pairs.length) return flash("There are no enrolled students to download with these filters.");
+  const groups = new Map(), newer = (a, b) => (a.schoolYear || "") > (b.schoolYear || "") || ((a.schoolYear || "") === (b.schoolYear || "") && termRank(a.term) > termRank(b.term));
+  pairs.forEach(({ r, e }) => {
+    const key = mode === "year" ? e.schoolYear || "No school year" : mode === "term" ? `${e.schoolYear || ""} ${e.term}`.trim() : "Enrolled masterlist";
+    if (!groups.has(key)) groups.set(key, new Map());
+    const g = groups.get(key), k = r.id + (mode === "term" ? "|" + e.id : ""), c = g.get(k);
+    if (!c) g.set(k, { r, e, terms: new Set([e.term]), years: new Set(e.schoolYear ? [e.schoolYear] : []) }); else { c.terms.add(e.term); if (e.schoolYear) c.years.add(e.schoolYear); if (newer(e, c.e)) c.e = e; }
+  });
+  const header = Object.keys(emRow({}, {}, [], []));
+  saveXlsx([...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((k) => ({ name: k, header, rows: [...groups.get(k).values()].sort((a, b) => String(a.r.name).localeCompare(b.r.name)).map((c) => emRow(c.r, c.e, [...c.terms].sort((a, b) => termRank(a) - termRank(b)), [...c.years].sort())) })), `enrolled-masterlist-${$("emYear").value || "all-years"}-${SID}.xlsx`);
+};
 
 /* ======================= HISTORY ======================= */
 async function loadHistory() {

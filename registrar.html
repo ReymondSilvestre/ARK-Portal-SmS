@@ -22,6 +22,7 @@
 <div class="panel"><h2>Enrolled and not enrolled per grade level</h2><div class="tablewrap"><table id="dsGrade"></table></div></div>
 <div class="panel"><h2>Enrolled per cluster / strand</h2><div class="tablewrap"><table id="dsStrand"></table></div></div>
 <div class="panel"><h2>Enrolled and not enrolled per term / quarter</h2><p class="muted fine">For the chosen school year.</p><div class="tablewrap"><table id="dsTermTbl"></table></div></div>
+<div class="panel"><h2>Enrolled per learning modality</h2><div class="tablewrap"><table id="dsModality"></table></div></div>
 <div class="panel"><h2>Male and female - registration masterlist</h2><div class="tablewrap"><table id="dsGenReg"></table></div></div>
 <div class="panel"><h2>Male and female - enrolled masterlist</h2><div class="tablewrap"><table id="dsGenEn"></table></div></div>
 <div class="panel"><h2>Male and female per section</h2><div class="tablewrap"><table id="dsGenSec"></table></div></div>
@@ -31,6 +32,7 @@
 <section data-s="reg" hidden><div class="panel">
 <h2 id="rgHead">Student registration</h2>
 <div class="row">
+<label>School year <span class="req">*</span><input id="rgYear" maxlength="9" placeholder="2026-2027" list="yrList" autocomplete="off"><datalist id="yrList"></datalist></label>
 <label>Grade level <span class="req">*</span><select id="rgGrade"></select></label>
 <label>Student ID No. <span class="req">*</span><input id="rgNo" autocomplete="off" maxlength="30"></label>
 <label>LRN <small>12 digits. Leave blank if the student has none yet.</small><input id="rgLrn" inputmode="numeric" autocomplete="off" maxlength="12"></label>
@@ -71,6 +73,7 @@
 <label>Term / quarter<select id="enTerm"></select></label>
 <label class="narrow">School year<input id="enYear" maxlength="9" placeholder="2026-2027"></label>
 <label>Cluster / strand<select id="enStrand"></select></label>
+<label>Learning modality<select id="enModality"></select></label>
 <label>Section<select id="enSection"></select><small id="enSecHint"></small></label></div>
 <div class="row" id="enExtra" style="margin-top:.6rem"></div>
 <div class="row" style="margin-top:.8rem"><button class="btn primary" id="enSave">Enroll student</button></div>
@@ -101,7 +104,8 @@
 <div class="row"><label>Search<input id="mlQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
 <label>Grade level<select id="mlGrade"></select></label><label>Voucher<select id="mlVoucher"></select></label>
 <label>Sort names<select id="mlSort"><option value="az">A &rarr; Z</option><option value="za">Z &rarr; A</option><option value="no">Student ID No.</option></select></label></div>
-<div class="btnbar"><button class="btn primary" id="mlXlsx" type="button">Download all (Excel)</button><button class="btn" type="button" data-goto="enrolled:elList">Open the enrolled masterlist</button><button class="btn" type="button" data-goto="enrolled:mlSec">View / download per section</button></div>
+<div class="row" style="margin-top:.6rem"><label>School year<select id="mlYear"></select></label><label>Term / quarter<select id="mlTerm"></select></label><label>Download as<select id="mlDlMode"><option value="current">Current filters (one sheet)</option><option value="year">One sheet per school year</option><option value="term">One sheet per quarter / term</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="mlDl" type="button">Download filtered list (Excel)</button><button class="btn" id="mlXlsx" type="button">Download all (Excel)</button><button class="btn" type="button" data-goto="enrolled:elList">Open the enrolled masterlist</button><button class="btn" type="button" data-goto="enrolled:mlSec">View / download per section</button></div>
 <div class="azbar" id="mlLetters" role="group" aria-label="Filter by first letter of the last name"></div>
 <p class="muted fine" id="mlCount"></p>
 <div class="scrollbox" id="mlScroll"><table id="mlTbl"></table></div></div>
@@ -110,13 +114,21 @@
 <!-- ENROLLED MASTERLIST -->
 <section data-s="enrolled" hidden>
 <div class="subnav noprint" data-sub="enrolled" aria-label="Enrolled masterlist">
-<button class="btn" type="button" data-p="elList">Enrolled students <span class="cnt" id="elCnt"></span></button><button class="btn" type="button" data-p="mlSec">View / download per section</button></div>
+<button class="btn" type="button" data-p="elList">Enrolled students <span class="cnt" id="elCnt"></span></button><button class="btn" type="button" data-p="mlSec">View / download per section</button><button class="btn" type="button" data-p="elRemark">Remark / remove student</button></div>
+<div class="panel" data-p="elRemark" hidden><h2>Remark / remove student</h2>
+<p class="muted fine">Open this from the <b>Remark</b> or <b>Delete</b> button of a student in the enrolled list. A remark (<b>Transferred Out</b>, <b>Drop Out</b> or <b>Cancelled Enrolled</b>) is saved on the student's enrollment record for that school year. When the box below is ticked, the student's <b>login account is deleted</b> as well, even if it was already created. The registration and enrollment records stay, so the history is kept.</p>
+<div id="rmNone" class="muted">No student chosen. Press <b>Remark</b> on a student in <b>Enrolled students</b>.</div>
+<div id="rmBox" hidden><div class="infogrid" id="rmInfo"></div>
+<div class="row" style="margin-top:.6rem"><label>Remark<select id="rmSel"></select></label><label>Date<input type="date" id="rmDate"></label><label>Note <small>Optional</small><input id="rmNote" maxlength="200" autocomplete="off"></label></div>
+<label class="chk" style="display:flex;gap:.5rem;align-items:center;margin-top:.6rem"><input type="checkbox" id="rmDrop" checked> Also delete this student's login account</label><p class="muted fine" id="rmAcc"></p>
+<div class="btnbar"><button class="btn primary" id="rmSave" type="button">Save remark</button><button class="btn" id="rmCancel" type="button">Cancel</button></div></div></div>
 <div class="panel" data-p="elList"><h2>Enrolled masterlist</h2>
 <p class="muted fine">Only students who are enrolled in a section, taken from the enrollment records. A student enrolled in several terms / quarters appears once, with the terms listed.</p>
 <div class="row"><label>Search<input id="elQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
 <label>School year<select id="elYear"></select></label><label>Term / quarter<select id="elTerm"></select></label><label>Grade level<select id="elGrade"></select></label></div>
 <div class="row" style="margin-top:.6rem"><label>Cluster / strand<select id="elStrand"></select></label><label>Section<select id="elSection"></select></label><label>Voucher<select id="elVoucher"></select></label>
 <label>Sort names<select id="elSort"><option value="az">A &rarr; Z</option><option value="za">Z &rarr; A</option><option value="no">Student ID No.</option></select></label></div>
+<div class="row" style="margin-top:.6rem"><label>Learning modality<select id="elModality"></select></label><label>Remark<select id="elRemark"></select></label><label>Download as<select id="elDlMode"><option value="current">Current filters (one sheet)</option><option value="year">One sheet per school year</option><option value="term">One sheet per quarter / term</option></select></label></div>
 <div class="btnbar"><button class="btn primary" id="elXlsx" type="button">Download enrolled masterlist (Excel)</button></div>
 <p class="muted fine" id="elCount"></p>
 <div class="scrollbox"><table id="elTbl"></table></div></div>

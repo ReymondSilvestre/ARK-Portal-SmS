@@ -9,7 +9,7 @@
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="tabs noprint" id="tabs">
 <button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="pay">Record a payment</button><button class="btn" data-t="tx">Payment transactions</button>
-<button class="btn" data-t="bal">Student balances</button><button class="btn" data-t="calc">Payment computation</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button></div>
+<button class="btn" data-t="em">Enrolled masterlist</button><button class="btn" data-t="bal">Student balances</button><button class="btn" data-t="calc">Payment computation</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button></div>
 <div class="panel noprint"><div class="row"><label>School year<select id="fnYear"></select></label></div>
 <p class="muted fine">Everything on these pages is for the chosen school year. Students come from the <b>enrolled masterlist</b> (Registrar) of that school year; each student's grade level and voucher type decide the total to pay.</p></div>
 
@@ -49,6 +49,18 @@
 <p class="muted fine" id="txCount"></p>
 <div class="scrollbox"><table id="txTbl"></table></div></div></section>
 
+<!-- ENROLLED MASTERLIST (view only) -->
+<section data-s="em" hidden><div class="panel">
+<h2>Enrolled masterlist <span class="cnt" id="emCnt"></span></h2>
+<p class="muted fine">View only. These are the students enrolled by the Registrar. Filter by school year and quarter / term, then download.</p>
+<div class="row"><label>Search<input id="emQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label><label>School year<select id="emYear"></select></label><label>Term / quarter<select id="emTerm"></select></label><label>Grade level<select id="emGrade"></select></label></div>
+<div class="row" style="margin-top:.6rem"><label>Section<select id="emSection"></select></label><label>Voucher<select id="emVoucher"></select></label><label>Learning modality<select id="emModality"></select></label><label>Remark<select id="emRemark"></select></label>
+<label>Sort names<select id="emSort"><option value="az">A &rarr; Z</option><option value="za">Z &rarr; A</option><option value="no">Student ID No.</option></select></label></div>
+<div class="row" style="margin-top:.6rem"><label>Download as<select id="emDlMode"><option value="current">Current filters (one sheet)</option><option value="year">One sheet per school year</option><option value="term">One sheet per quarter / term</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="emXlsx" type="button">Download (Excel)</button><button class="btn" id="emClear" type="button">Clear filters</button></div>
+<p class="muted fine" id="emCount"></p>
+<div class="scrollbox"><table id="emTbl"></table></div></div></section>
+
 <!-- STUDENT BALANCES -->
 <section data-s="bal" hidden><div class="panel">
 <h2>Student balances</h2>
@@ -84,8 +96,8 @@
 <div class="chiplist" id="tyList"></div>
 <div class="row"><label>Add a payment transaction<input id="tyNew" maxlength="30" placeholder="e.g. Books" autocomplete="off"></label><button class="btn primary" id="tyAdd" type="button">Add</button></div></div>
 <div class="panel" data-p="stFees" hidden><h2>Fee schedule - <span id="fsYear"></span></h2>
-<p class="muted fine">Pick a voucher group, then type the amount each grade level pays for each transaction. A student's total to pay uses the group of his or her voucher type. A <b>blank</b> cell falls back to <b>Default for all students</b>; type <b>0</b> to make it free for that group.</p>
-<div class="row"><label>Voucher group<select id="fsGroup"></select></label><label>Copy the whole schedule from<select id="fsCopy"></select></label><button class="btn" id="fsCopyGo" type="button">Copy</button></div>
+<p class="muted fine">Pick a voucher group and a grade level, then type the amount for each transaction. Your typing is kept while you switch grade level; press <b>Save this group</b> once to save every grade level. A student's total to pay uses the group of his or her voucher type. A <b>blank</b> cell falls back to <b>Default for all students</b>; type <b>0</b> to make it free for that group.</p>
+<div class="row"><label>Voucher group<select id="fsGroup"></select></label><label>Grade level<select id="fsGrade"></select></label><label>Copy the whole schedule from<select id="fsCopy"></select></label><button class="btn" id="fsCopyGo" type="button">Copy</button></div>
 <div class="tablewrap"><table id="fsTbl" class="feegrid"></table></div>
 <div class="btnbar"><button class="btn primary" id="fsSave" type="button">Save this group</button><button class="btn" id="fsClear" type="button">Clear this group</button></div></div>
 </section>
