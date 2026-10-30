@@ -21,7 +21,7 @@ document.addEventListener("submit", function (e) {
     <h1>Sign in</h1>
     <div class="role-tabs" role="tablist" aria-label="Choose how you sign in">
       <button type="button" role="tab" id="tabStudent" aria-controls="panelStudent" aria-selected="true">Student</button>
-      <button type="button" role="tab" id="tabStaff" aria-controls="panelStaff" aria-selected="false">Teacher / Registrar / Finance / IT Admin</button>
+      <button type="button" role="tab" id="tabStaff" aria-controls="panelStaff" aria-selected="false">Teacher / Registrar / Finance / Custodian / Guidance / IT Admin</button>
     </div>
 
     <!-- STUDENT LOGIN -->
@@ -37,14 +37,14 @@ document.addEventListener("submit", function (e) {
 
     <!-- TEACHER / IT ADMIN LOGIN -->
     <div id="panelStaff" role="tabpanel" aria-labelledby="tabStaff" hidden>
-      <p class="muted role-note"><b>Teachers, Registrars and Finance:</b> school code + Employee No. <b>IT Admins:</b> your email (leave the school code blank).</p>
+      <p class="muted role-note"><b>Teachers, Registrar, Finance, Custodian and Guidance:</b> school code + Employee No. <b>IT Admins:</b> your email (leave the school code blank).</p>
       <form id="ft" novalidate>
-        <label>School code <small>Teachers, Registrars and Finance only. Leave blank if you are an IT Admin.</small>
+        <label>School code <small>Teachers, Registrar, Finance, Custodian and Guidance only. Leave blank if you are an IT Admin.</small>
           <input id="school" autocomplete="organization" autocapitalize="characters"></label>
         <label>Employee No. or email<input id="email" autocomplete="username" autocapitalize="none" required></label>
         <label>Password<input id="pw" type="password" autocomplete="current-password" required>
           <small>First time (teachers): your birth year + the first letter of your last name (example 1985D).</small></label>
-        <button class="btn primary block" id="go">Sign in as Teacher / Registrar / Finance / IT Admin</button>
+        <button class="btn primary block" id="go">Sign in as Teacher / Registrar / Finance / Custodian / Guidance / IT Admin</button>
       </form>
     </div>
 
@@ -54,7 +54,7 @@ document.addEventListener("submit", function (e) {
 
   <section id="forgot" hidden>
     <h1>Reset your password</h1>
-    <p class="muted">A reset link is sent to the <b>email address on your account</b> (the one you gave when your account was created). Students: enter your Exam ID No. or email. <b>Teachers:</b> only your school\u2019s IT Admin can reset your password, please contact them.</p>
+    <p class="muted">A reset link is sent to the <b>email address on your account</b> (the one you gave when your account was created). Students: enter your Exam ID No. or email. <b>Teachers and other staff:</b> ask your school\u2019s IT Admin to email you a reset link.</p>
     <form id="ff" novalidate>
       <label id="fschoolWrap">School code <small>Teachers only. Leave blank otherwise.</small><input id="fschool" autocapitalize="characters"></label>
       <label>Email, Employee No. or Exam ID No.<input id="fwho" autocomplete="username" autocapitalize="none" required></label>
@@ -139,11 +139,11 @@ $("showForgot").onclick = () => view(true); $("backSignin").onclick = () => view
 $("ff").addEventListener("submit", async (e) => {
   e.preventDefault(); msg.hidden = true;
   const who = $("fwho").value.trim(); if (!who) return show("Enter your email, Employee No. or Exam ID No.");
-  if ($("fschool").value.trim()) return show("Teacher passwords can only be reset by your school's IT Admin. Please contact your IT Admin.");
+  if ($("fschool").value.trim()) return show("Staff passwords are reset through your school's IT Admin: ask them to email you a reset link.");
   $("fgo").disabled = true;
   try {
     const r = await sendReset(who, $("fschool").value);
-    if (r === "noemail") show("No email is saved for this account, so a link cannot be sent. Teachers: ask your school's IT Admin to reset your password. Students: ask your teacher.");
+    if (r === "noemail") show("No email is saved for this account, so a link cannot be sent. Staff: ask your school's IT Admin to email you a reset link. Students: ask your teacher.");
     else show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder. After choosing a new password, sign in with it.", true);
   } catch (err) {
     if (err.code === "auth/user-not-found") show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder.", true);
@@ -163,11 +163,11 @@ async function signIn(who, password, school, wantStudent, btn) {
     const p = await getProfile(c.user.uid);
     if (p && wantStudent && p.role !== "student") {
       await auth.signOut(); btn.disabled = false;
-      return show("This is the Student sign in. Teachers, Registrars, Finance and IT Admins: use the Teacher / Registrar / Finance / IT Admin tab.");
+      return show("This is the Student sign in. Teachers, Registrar, Finance, Custodian, Guidance and IT Admins: use the staff tab.");
     }
     if (p && !wantStudent && p.role === "student") {
       await auth.signOut(); btn.disabled = false;
-      return show("This is the Teacher / Registrar / Finance / IT Admin sign in. Students: use the Student tab.");
+      return show("This is the staff sign in. Students: use the Student tab.");
     }
     if (!wantStudent) { try { localStorage.setItem("ark.schoolCode", school.trim().toUpperCase()); } catch {} }
     location.href = await destinationFor(c.user);

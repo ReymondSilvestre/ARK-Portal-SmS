@@ -35,10 +35,10 @@
 
     <section data-view="teachers" hidden>
       <div class="panel">
-        <h2>Add a faculty / teacher, registrar or finance account</h2>
-        <p class="muted">Only you can create teacher, registrar and finance accounts for this school. The <b>Registrar</b> registers and enrols students and assigns each section's adviser; the adviser (teacher) then activates the student accounts. <b>Finance</b> records school payments and shows each student's balance.</p>
+        <h2>Add a faculty / teacher, registrar, finance, custodian or guidance account</h2>
+        <p class="muted">Only you can create teacher, registrar, finance, custodian and guidance accounts for this school. The <b>Registrar</b> registers and enrols students, keeps the school-requirements checklist and assigns each section's adviser; the adviser (teacher) then activates the student accounts. <b>Finance</b> records school payments and shows each student's balance. The <b>Custodian</b> records the uniforms, P.E. uniforms, IDs and other items given to students. <b>Guidance</b> keeps the students' health and guidance records.</p>
         <form id="newT" class="row" novalidate>
-          <label>Account type<select name="role"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option></select></label>
+          <label>Account type<select name="role"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option></select></label>
           <label>Last name<input name="lastName" autocomplete="off" required></label>
           <label>First name<input name="firstName" autocomplete="off" required></label>
           <label class="narrow">M.I.<input name="mi" maxlength="1" autocomplete="off"></label>
@@ -47,11 +47,11 @@
           <label>Email <small>Optional. Used for password reset.</small><input name="email" type="email" autocomplete="off" placeholder="Leave blank: reset links go to your inbox"></label>
           <button class="btn primary" id="addBtn">Create account</button>
         </form>
-        <small>Username = Employee No. (with the school code), for teachers, registrars and finance staff alike. Temporary password = birth year + first letter of the last name (example <b>1985D</b>). The teacher must choose a new password at first sign-in. If you enter the teacher's <b>real email</b>, the account is created with that email: they can still sign in with school code + Employee No., and <b>Forgot your password?</b> sends the reset link to that email.</small>
+        <small>Username = Employee No. (with the school code), for teachers, registrar, finance, custodian and guidance staff alike. Temporary password = birth year + first letter of the last name (example <b>1985D</b>). The teacher must choose a new password at first sign-in. If you enter the teacher's <b>real email</b>, the account is created with that email: they can still sign in with school code + Employee No., and <b>Forgot your password?</b> sends the reset link to that email.</small>
       </div>
       <div class="panel">
         <div class="row"><label>Search<input id="q" placeholder="Name, Employee No. or Exam ID No."></label>
-          <label>Show<select id="roleF"><option value="">Teachers and students</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="student">Students only</option></select></label></div>
+          <label>Show<select id="roleF"><option value="">Teachers and students</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="student">Students only</option></select></label></div>
         <div class="tablewrap"><table id="teachers"></table></div>
       </div>
     </section>

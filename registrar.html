@@ -8,7 +8,7 @@
 <span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="tabs noprint" id="tabs">
-<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="reg">Student registration</button><button class="btn" data-t="enroll">Enrollment</button>
+<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="reg">Student registration</button><button class="btn" data-t="reqs">School requirements</button><button class="btn" data-t="enroll">Enrollment</button>
 <button class="btn" data-t="sections">Sections &amp; advisers</button><button class="btn" data-t="master">Registration masterlist</button><button class="btn" data-t="enrolled">Enrolled masterlist</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button></div>
 
 <!-- DASHBOARD -->
@@ -22,6 +22,8 @@
 <div class="panel"><h2>Enrolled and not enrolled per grade level</h2><div class="tablewrap"><table id="dsGrade"></table></div></div>
 <div class="panel"><h2>Enrolled per cluster / strand</h2><div class="tablewrap"><table id="dsStrand"></table></div></div>
 <div class="panel"><h2>Enrolled and not enrolled per term / quarter</h2><p class="muted fine">For the chosen school year.</p><div class="tablewrap"><table id="dsTermTbl"></table></div></div>
+<div class="panel"><h2>Enrollment status</h2><p class="muted fine">Every registered student, by the status set by the registrar.</p><div class="tablewrap"><table id="dsStatus"></table></div></div>
+<div class="panel"><h2>School requirements per grade level</h2><p class="muted fine">Students whose checklist is complete, and those still missing documents.</p><div class="tablewrap"><table id="dsReq"></table></div></div>
 <div class="panel"><h2>Enrolled per learning modality</h2><div class="tablewrap"><table id="dsModality"></table></div></div>
 <div class="panel"><h2>Male and female - registration masterlist</h2><div class="tablewrap"><table id="dsGenReg"></table></div></div>
 <div class="panel"><h2>Male and female - enrolled masterlist</h2><div class="tablewrap"><table id="dsGenEn"></table></div></div>
@@ -59,6 +61,28 @@
 <div class="row" style="margin-top:1rem"><button class="btn primary" id="rgSave">Save registration</button><button class="btn" id="rgCancel" type="button" hidden>Cancel editing</button></div>
 <p class="muted fine">Registered students go to the <b>Master list</b>. To place a student in a section, use the <b>Enrollment</b> tab.</p>
 </div></section>
+
+<!-- SCHOOL REQUIREMENTS -->
+<section data-s="reqs" hidden>
+<div class="panel" id="rqListBox"><h2>School requirements checklist <span class="cnt" id="rqCnt"></span></h2>
+<p class="muted fine">After a student is registered, open the checklist and tick each document when the student hands it in. You can also edit the student's <b>enrollment status</b> here. A student can be enrolled in a section from the <b>Enrollment</b> tab. The list of required documents is set under <b>Settings &rarr; School requirements</b>.</p>
+<div class="row"><label>Search<input id="rqQ" placeholder="Student ID No., LRN or name" autocomplete="off"></label>
+<label>School year registered<select id="rqYear"></select></label><label>Grade level<select id="rqGrade"></select></label>
+<label>Enrollment status<select id="rqStatus"></select></label>
+<label>Checklist<select id="rqCheck"><option value="">All students</option><option value="complete">Complete (all documents)</option><option value="incomplete">Incomplete (some missing)</option><option value="none">Nothing submitted yet</option></select></label></div>
+<div class="btnbar"><button class="btn primary" id="rqXlsx" type="button">Download checklist (Excel)</button><button class="btn" id="rqClear" type="button">Clear filters</button></div>
+<p class="muted fine" id="rqCount"></p>
+<div class="scrollbox"><table id="rqTbl"></table></div></div>
+<div class="panel" id="rqDetail" hidden><h2 id="rqHead">Checklist</h2>
+<div class="infogrid" id="rqInfo"></div>
+<div class="formgrp"><h3>Documents submitted</h3><p class="muted fine">Tick a document when the student submits it. The date is today unless you change it. Untick it if it was ticked by mistake.</p>
+<div class="reqlist" id="rqItems"></div>
+<div class="btnbar"><button class="btn" id="rqAll" type="button">Mark all as submitted</button><button class="btn" id="rqNone" type="button">Clear all</button></div></div>
+<div class="formgrp"><h3>Enrollment status</h3>
+<div class="row"><label>Status<select id="rqDStatus"></select></label><label>Date<input type="date" id="rqDDate"></label><label>Note <small>Optional</small><input id="rqDNote" maxlength="200" autocomplete="off"></label></div>
+<p class="muted fine" id="rqStHint"></p></div>
+<div class="btnbar"><button class="btn primary" id="rqSave" type="button">Save checklist and status</button><button class="btn" id="rqEnroll" type="button">Go to enrollment</button><button class="btn" id="rqBack" type="button">&larr; Back to the list</button></div></div>
+</section>
 
 <!-- ENROLLMENT -->
 <section data-s="enroll" hidden>
@@ -161,11 +185,15 @@
 <!-- SETTINGS -->
 <section data-s="settings" hidden>
 <div class="subnav noprint" data-sub="settings" aria-label="Settings">
-<button class="btn" type="button" data-p="stVoucher">Voucher types</button><button class="btn" type="button" data-p="stStrand">Clusters / strands</button><button class="btn" type="button" data-p="stFields">Additional information</button></div>
+<button class="btn" type="button" data-p="stVoucher">Voucher types</button><button class="btn" type="button" data-p="stStrand">Clusters / strands</button><button class="btn" type="button" data-p="stReqs">School requirements</button><button class="btn" type="button" data-p="stFields">Additional information</button></div>
 <div class="panel" data-p="stVoucher"><h2>Voucher types</h2><div class="chiplist" id="vtList"></div>
 <div class="row"><label>Add a voucher type<input id="vtNew" maxlength="12" placeholder="e.g. QVR" autocomplete="off"></label><button class="btn primary" id="vtAdd">Add</button></div></div>
 <div class="panel" data-p="stStrand" hidden><h2>Clusters / strands</h2><div class="chiplist" id="stList"></div>
 <div class="row"><label>Add a cluster / strand<input id="stNew" maxlength="40" placeholder="e.g. TVL-ICT" autocomplete="off"></label><button class="btn primary" id="stAdd">Add</button></div></div>
+<div class="panel" data-p="stReqs" hidden><h2>School requirements</h2>
+<p class="muted fine">The documents a student must submit. These appear on every student's checklist (School requirements tab). Removing one does not delete what was already ticked.</p>
+<div class="chiplist" id="rqSetList"></div>
+<div class="row"><label>Add a requirement<input id="rqNew" maxlength="60" placeholder="e.g. Medical certificate" autocomplete="off"></label><button class="btn primary" id="rqAdd" type="button">Add</button></div></div>
 <div class="panel" data-p="stFields" hidden><h2>Additional information</h2>
 <p class="muted fine">Add your own fields. <b>Student registration</b> fields appear on the registration form. <b>Enrollment</b> fields appear on the Enrollment form. <b>Master list</b> fields are filled in while editing a student from the Master list. All of them show as columns in the lists, can be downloaded to Excel, and can be downloaded to Excel.</p>
 <div id="fieldsBox"></div></div>

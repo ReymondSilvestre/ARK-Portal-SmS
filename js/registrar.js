@@ -20,6 +20,12 @@ const MODALITIES = ["Face to Face", "Blended", "Modular", "Internal Agreement"];
 const REMARKS = ["Transferred Out", "Drop Out", "Cancelled Enrolled"];
 const DEFAULT_VOUCHERS = ["PUB", "ALS", "ESC"];
 const DEFAULT_STRANDS = ["STEM", "ABM", "HUMSS", "GAS", "TVL"];
+/* School requirements: what a student hands in after registering (the list can be changed under Settings). The ids are shared with the Records sheet. */
+const DEFAULT_REQS = [{ id: "form138", label: "Form 138 / Report Card" }, { id: "psa", label: "PSA Birth Certificate" }, { id: "goodmoral", label: "Good Moral Certificate" },
+  { id: "form137", label: "Form 137 / SF10 (Permanent Record)" }, { id: "pictures", label: "2x2 ID Pictures" }, { id: "enrollform", label: "Signed Enrollment Form" }, { id: "transfer", label: "Certificate of Transfer (transferees only)" }];
+const STATUSES = ["Pending", "Enrolled", "Not Enrolled", ...REMARKS];
+const STATUS_CLASS = { Pending: "st-pending", Enrolled: "st-enrolled", "Not Enrolled": "st-not", "Transferred Out": "st-out", "Drop Out": "st-out", "Cancelled Enrolled": "st-out" };
+const statusBadge = (s) => `<span class="badge ${STATUS_CLASS[s] || "st-not"}">${esc(s)}</span>`;
 const schoolYearNow = () => { const d = new Date(), y = d.getFullYear(); return d.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`; };
 const rid = (no) => `${SID}_${String(no).trim()}`;
 const nameOf = (p) => `${p.lastName}, ${p.firstName}${p.middleName ? " " + p.middleName : ""}${p.suffix ? " " + p.suffix : ""}`;
@@ -30,9 +36,13 @@ const isLrn = (s) => /^\d{12}$/.test(s);
 const isStuNo = (s) => /^[A-Za-z0-9._-]{1,30}$/.test(s);
 const normGender = (g) => (/^\s*m/i.test(g) ? "Male" : /^\s*f/i.test(g) ? "Female" : "");
 const tsec = (x) => x?.createdAt?.seconds || 0;
+const statusOf = (r) => (r && r.enrollStatus) || "Pending";
+const reqCount = (r) => S.reqs.filter((q) => (r.reqs || {})[q.id]).length;
+const reqDone = (r) => S.reqs.length > 0 && reqCount(r) >= S.reqs.length;
+const reqText = (r) => `${reqCount(r)} of ${S.reqs.length}`;
 
 /* ---------- data ---------- */
-const S = { registry: [], sections: [], teachers: [], enrollments: [], vouchers: [...DEFAULT_VOUCHERS], strands: [...DEFAULT_STRANDS], fields: { reg: [], enroll: [], master: [] } };
+const S = { registry: [], sections: [], teachers: [], enrollments: [], vouchers: [...DEFAULT_VOUCHERS], strands: [...DEFAULT_STRANDS], reqs: DEFAULT_REQS.map((x) => ({ ...x })), fields: { reg: [], enroll: [], master: [] } };
 const bySchool = async (c, ...w) => (await getDocs(query(collection(db, c), where("schoolId", "==", SID), ...w))).docs.map((d) => ({ id: d.id, ...d.data() }));
 async function refresh() {
   await run(async () => {
@@ -45,11 +55,25 @@ async function refresh() {
     S.sections = cls.filter((c) => c.gradeLevel).sort((a, b) => a.name.localeCompare(b.name));
     S.enrollments = ens;
     S.teachers = tch.docs.map((d) => ({ uid: d.id, ...d.data() })).filter((t) => t.status === "active").sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
-    if (set && set.exists()) { S.vouchers = set.data().voucherTypes || S.vouchers; S.strands = set.data().strands || S.strands; const f = set.data().fields || {}; S.fields = { reg: f.reg || [], enroll: f.enroll || [], master: f.master || [] }; }
+    if (set && set.exists()) { S.vouchers = set.data().voucherTypes || S.vouchers; S.strands = set.data().strands || S.strands; if (Array.isArray(set.data().requirements) && set.data().requirements.length) S.reqs = set.data().requirements; const f = set.data().fields || {}; S.fields = { reg: f.reg || [], enroll: f.enroll || [], master: f.master || [] }; }
+    await backfillStatus();
     render();
   });
 }
-const saveSettings = () => setDoc(doc(db, "registrarSettings", SID), { schoolId: SID, voucherTypes: S.vouchers, strands: S.strands, fields: S.fields, updatedAt: serverTimestamp() }, { merge: true });
+/** Students registered before the "enrollment status" existed get one now (worked out once from their enrollment records). */
+async function backfillStatus() {
+  const todo = S.registry.filter((r) => !r.enrollStatus);
+  if (!todo.length) return;
+  const stOf = (r) => { const mine = S.enrollments.filter((e) => e.registryId === r.id); if (!mine.length) return "Not Enrolled"; if (mine.some((e) => !e.remark)) return "Enrolled"; return mine.find((e) => e.remark).remark; };
+  try {
+    for (let i = 0; i < todo.length; i += 200) {
+      const b = writeBatch(db), part = todo.slice(i, i + 200);
+      part.forEach((r) => b.update(doc(db, "registry", r.id), { enrollStatus: stOf(r) }));
+      await b.commit(); part.forEach((r) => (r.enrollStatus = stOf(r)));
+    }
+  } catch (e) { console.warn("Could not set the enrollment status of older students", e); }
+}
+const saveSettings = () => setDoc(doc(db, "registrarSettings", SID), { schoolId: SID, voucherTypes: S.vouchers, strands: S.strands, requirements: S.reqs, fields: S.fields, updatedAt: serverTimestamp() }, { merge: true });
 
 /* ---------- history log: who changed what ---------- */
 const FLABEL = { schoolYear: "School year", gradeLevel: "Grade level", lrn: "LRN", voucherType: "Voucher type", lastName: "Last name", firstName: "First name", middleName: "Middle name", suffix: "Suffix", birthday: "Birthdate", gender: "Gender",
@@ -105,13 +129,14 @@ function render() {
   keep("scGrade", options(GRADES)); keep("scStrand", options(S.strands, noneS)); keep("scFilter", options(GRADES, "All grade levels"));
   keep("mlGrade", options(GRADES, "All grade levels")); keep("mlVoucher", options(S.vouchers, "All voucher types"));
   keep("dsYear", options(yearChoices())); keep("dsTermSel", options(TERMS, "All terms / quarters"));
+  keep("rqYear", options(yearChoices(), "All school years")); keep("rqGrade", options(GRADES, "All grade levels")); keep("rqStatus", options(STATUSES, "All statuses")); keep("rqDStatus", options(STATUSES));
   keep("elYear", options(yearChoices(), "All school years")); keep("elTerm", options(TERMS, "All terms / quarters")); keep("elGrade", options(GRADES, "All grade levels")); keep("elStrand", options(S.strands, "All clusters / strands"));
   keep("elSection", `<option value="">All sections</option>` + [...S.sections].sort(byGradeName).map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("")); keep("elVoucher", options(S.vouchers, "All voucher types"));
   keep("msGrade", options(GRADES, "All grade levels")); keep("msYear", options(yearsList(), "All school years")); keep("msTerm", options(TERMS, "All terms"));
   keep("scAdv", S.teachers.map((t) => `<option value="${esc(t.uid)}">${esc(t.displayName)} (${esc(t.employeeId || "")})</option>`).join("") || `<option value="">No teacher accounts yet - ask the IT Admin</option>`);
   if (!$("enYear").value) $("enYear").value = schoolYearNow();
   if (!$("rgYear").value && !editing) $("rgYear").value = schoolYearNow();
-  renderVoucherStrand(); renderFieldSettings(); renderExtras(); renderDash(); renderMaster(); renderEnList(); renderMasterSections(); renderEnrollPicker(); renderSections(); renderSectionView(); renderEnrolled();
+  renderVoucherStrand(); renderReqSettings(); renderFieldSettings(); renderExtras(); renderReqs(); renderDash(); renderMaster(); renderEnList(); renderMasterSections(); renderEnrollPicker(); renderSections(); renderSectionView(); renderEnrolled();
 }
 
 /* ======================= ADDITIONAL INFORMATION (custom fields) ======================= */
@@ -204,14 +229,14 @@ $("rgSave").onclick = () => run(async () => {
   if (!editing && old) return flash(`Student ID No. ${p.studentNo} is already registered (${old.name}).`);
   if (p.lrn && S.registry.some((r) => r.lrn === p.lrn && r.id !== id)) return flash("Another student already has that LRN.");
   p.name = nameOf(p);
-  const rec = { ...p, ...(old ? {} : { schoolId: SID, createdBy: user.uid, createdAt: serverTimestamp() }), updatedAt: serverTimestamp() };
+  const rec = { ...p, ...(old ? {} : { schoolId: SID, createdBy: user.uid, createdAt: serverTimestamp(), enrollStatus: "Pending", reqs: {} }), updatedAt: serverTimestamp() };
   await setDoc(doc(db, "registry", id), rec, { merge: true });
   const who = `${p.name} (${p.studentNo})`, diff = old ? diffRec(old, p) : [];
   if (!old) await logEvent("Registered student", "student", who, [], `${p.schoolYear} - ${p.gradeLevel}${p.voucherType ? " - voucher " + p.voucherType : ""}`);
   else if (diff.length) await logEvent("Edited student", "student", who, diff);
   const merged = { ...(old || {}), ...p, extra: { ...(old?.extra || {}), ...p.extra }, id }; await syncStudent(merged);
   const was = editing; clearForm(); await refresh();
-  flash(was ? `Saved changes for ${p.name}.` : `Registered ${p.name}. Next: enroll the student in a section.` , true);
+  flash(was ? `Saved changes for ${p.name}.` : `Registered ${p.name} (status: Pending). Next: tick the School requirements checklist as the documents are handed in, then enroll the student in a section.`, true);
   if (old?.examNo && p.lrn && old.examNo !== p.lrn) flash(`Saved. The Exam ID No. stays ${old.examNo} because the student is already enrolled; it is not changed afterwards.`, true);
 });
 
@@ -241,23 +266,25 @@ function renderMaster() {
   const have = new Set(base.map(lastInit));
   $("mlLetters").innerHTML = `<button type="button" data-l="" class="${mlLetter ? "" : "on"}">All</button>` + "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((c) => `<button type="button" data-l="${c}" class="${mlLetter === c ? "on" : ""}" ${have.has(c) ? "" : 'style="opacity:.35"'}>${c}</button>`).join("");
   const cmp = { az: (a, b) => a.name.localeCompare(b.name), za: (a, b) => b.name.localeCompare(a.name), no: (a, b) => String(a.studentNo).localeCompare(String(b.studentNo), undefined, { numeric: true }) }[sort];
-  const rows = base.filter((r) => !mlLetter || lastInit(r) === mlLetter).sort(cmp), xf = colFields(), n = 12 + xf.length;
+  const rows = base.filter((r) => !mlLetter || lastInit(r) === mlLetter).sort(cmp), xf = colFields(), n = 14 + xf.length;
   $("mlCnt").textContent = `(${S.registry.length})`;
   $("mlCount").textContent = `${rows.length} of ${S.registry.length} registered students` + (rows.length > 12 ? " - scroll the list to see all" : "");
-  $("mlTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>School year</th><th>Grade</th><th>Voucher</th><th>Birthdate</th><th>Age</th><th>Gender</th><th>Contact</th>" + xf.map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th>Enrolled in</th><th></th></tr>" +
+  $("mlTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>School year</th><th>Grade</th><th>Voucher</th><th>Birthdate</th><th>Age</th><th>Gender</th><th>Contact</th>" + xf.map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th>Enrollment status</th><th>Requirements</th><th>Enrolled in</th><th></th></tr>" +
     (rows.slice(0, 3000).map((r) => { const e = latestEnrol(r);
       return `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(r.schoolYear || "-")}</td><td>${esc(r.gradeLevel || "")}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td><td>${esc(r.gender || "")}</td><td>${esc(r.contact || "")}</td>
       ${xf.map((f) => `<td>${esc((r.extra || {})[f.id] ?? "")}</td>`).join("")}
+      <td>${statusBadge(statusOf(r))}</td><td><span class="prog">${esc(reqText(r))}</span></td>
       <td>${e ? esc(e.sectionName) + `<small>${esc(e.term)} ${esc(e.schoolYear || "")}</small>` : '<span class="badge warn">Not enrolled</span>'}</td>
-      <td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-en="${esc(r.id)}">Enroll</button><button class="btn small" data-hi="${esc(r.id)}">History</button><button class="btn small danger" data-rm="${esc(r.id)}">Delete</button></td></tr>`; }).join("") ||
+      <td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-rq="${esc(r.id)}">Requirements</button><button class="btn small" data-en="${esc(r.id)}">Enroll</button><button class="btn small" data-hi="${esc(r.id)}">History</button><button class="btn small danger" data-rm="${esc(r.id)}">Delete</button></td></tr>`; }).join("") ||
       `<tr><td colspan="${n}">No students found.</td></tr>`);
 }
 $("mlLetters").onclick = (e) => { const b = e.target.closest("[data-l]"); if (b) { mlLetter = b.dataset.l; renderMaster(); } };
 ["mlQ", "mlGrade", "mlVoucher", "mlSort", "mlYear", "mlTerm"].forEach((i) => ($(i).oninput = renderMaster));
 $("mlTbl").onclick = (e) => run(async () => {
-  const b = e.target.closest("[data-ed],[data-en],[data-rm],[data-hi]"); if (!b) return;
-  const r = S.registry.find((x) => x.id === (b.dataset.ed || b.dataset.en || b.dataset.rm || b.dataset.hi)); if (!r) return;
+  const b = e.target.closest("[data-ed],[data-en],[data-rm],[data-hi],[data-rq]"); if (!b) return;
+  const r = S.registry.find((x) => x.id === (b.dataset.ed || b.dataset.en || b.dataset.rm || b.dataset.hi || b.dataset.rq)); if (!r) return;
   if (b.dataset.ed) return fillForm(r);
+  if (b.dataset.rq) return openChecklist(r);
   if (b.dataset.hi) { show("history"); $("hiQ").value = `(${r.studentNo})`; renderHistory(); scrollTo({ top: 0 }); return; }
   if (b.dataset.en) { show("enroll", "enForm"); $("enQ").value = r.studentNo; renderEnrollPicker(r.id); return; }
   await deleteStudent(r);
@@ -280,7 +307,7 @@ async function hasAccount(r) {
 /* ---------- Excel export (whole master list, one section, or every section) ---------- */
 const masterRow = (r) => ({ "Student ID No.": r.studentNo, LRN: r.lrn || "", "Voucher Type": r.voucherType || "", "Last Name": r.lastName, "First Name": r.firstName, "Middle Name": r.middleName || "", Suffix: r.suffix || "",
   Birthdate: r.birthday || "", Age: ageOf(r.birthday), Gender: r.gender || "", "Contact No.": r.contact || "", Address: r.address || "", "Father's Name": r.father || "", "Mother's Name": r.mother || "",
-  "Guardian Name": r.guardianName || "", "Guardian Contact No.": r.guardianContact || "", "Guardian Address": r.guardianAddress || "", "Grade Level": r.gradeLevel || "", "Registered School Year": r.schoolYear || "", ...Object.fromEntries(colFields().map((f) => [f.label, (r.extra || {})[f.id] ?? ""])) });
+  "Guardian Name": r.guardianName || "", "Guardian Contact No.": r.guardianContact || "", "Guardian Address": r.guardianAddress || "", "Grade Level": r.gradeLevel || "", "Registered School Year": r.schoolYear || "", "Enrollment Status": statusOf(r), "School Requirements Submitted": reqText(r), ...Object.fromEntries(colFields().map((f) => [f.label, (r.extra || {})[f.id] ?? ""])) });
 const slug = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
 function saveXlsx(sheets, file) {
   if (!window.XLSX) return flash("The Excel writer did not load. Check your internet connection.");
@@ -394,6 +421,7 @@ function dashScope() {
   const rows = S.registry.map((r) => { const e = latest.get(r.id) || null; return { r, e, grade: (e && e.gradeLevel) || r.gradeLevel || NOGRADE }; });
   return { y, t, ens, regMap, rows, enrolled: rows.filter((x) => x.e) };
 }
+const gs0 = (list) => [...GRADES, NOGRADE].filter((g) => list.some((x) => x.grade === g));
 function genderTable(list) {
   const gs = [...GRADES, NOGRADE].filter((g) => list.some((x) => x.grade === g));
   const line = (label, a, cls) => rowHtml([esc(label), a.filter(isM).length, a.filter(isF).length, a.length], cls);
@@ -403,9 +431,15 @@ function renderDash() {
   if (!dsInit) { dsInit = true; $("dsYear").value = schoolYearNow(); }
   const { y, t, ens, regMap, rows, enrolled } = dashScope(), notEn = rows.length - enrolled.length;
   $("dsCtx").textContent = `Showing: school year ${y || "all"}, ${t || "all terms / quarters"}.`;
-  $("dsCards").innerHTML = [["Registered students", rows.length], ["Total enrolled", enrolled.length], ["Total not enrolled", notEn, "warn"], ["Enrollment rate", pc(enrolled.length, rows.length)],
+  $("dsCards").innerHTML = [["Registered students", rows.length], ["Requirements complete", rows.filter((x) => reqDone(x.r)).length, "good"], ["Requirements incomplete", rows.filter((x) => !reqDone(x.r)).length, "warn"], ["Total enrolled", enrolled.length], ["Total not enrolled", notEn, "warn"], ["Enrollment rate", pc(enrolled.length, rows.length)],
     ["Transferred out / dropped out / cancelled", new Set(S.enrollments.filter((e) => e.remark && (!y || e.schoolYear === y) && (!t || e.term === t) && regMap.has(e.registryId)).map((e) => e.registryId)).size, "warn"],
     ["Enrolled - male", enrolled.filter(isM).length], ["Enrolled - female", enrolled.filter(isF).length]].map(([l, v, c]) => `<div class="stat ${c || ""}"><b>${v}</b><span>${l}</span></div>`).join("");
+  // per enrollment status (set by the registrar)
+  const stc = new Map(STATUSES.map((k) => [k, 0])); rows.forEach((x) => stc.set(statusOf(x.r), (stc.get(statusOf(x.r)) || 0) + 1));
+  $("dsStatus").innerHTML = hdr(["Enrollment status", "Students", "% of registered"]) + (rows.length ? [...stc.entries()].filter(([, n]) => n).map(([k, n]) => rowHtml([statusBadge(k), n, `${pc(n, rows.length)} ${bar(n, rows.length)}`])).join("") + rowHtml(["All students", rows.length, ""], "tot") : emptyRow(3, "No registered students yet."));
+  // school requirements per grade level
+  const rg = (g, a, cls) => { const c = a.filter((x) => reqDone(x.r)).length; return rowHtml([esc(g), a.length, c, a.length - c, `${pc(c, a.length)} ${bar(c, a.length)}`], cls); };
+  $("dsReq").innerHTML = hdr(["Grade level", "Registered", "Complete", "Incomplete", "% complete"]) + (gs0(rows).length ? gs0(rows).map((g) => rg(g, rows.filter((x) => x.grade === g))).join("") + rg("All grade levels", rows, "tot") : emptyRow(5, "No registered students yet."));
   // per grade level
   const gs = [...GRADES, NOGRADE].filter((g) => rows.some((x) => x.grade === g));
   const gl = (g, a, cls) => { const n = a.filter((x) => x.e).length; return rowHtml([esc(g), a.length, n, a.length - n, `${pc(n, a.length)} ${bar(n, a.length)}`], cls); };
@@ -461,13 +495,13 @@ function enrolledRecords() {
 }
 function renderEnList() {
   if (!elInit) { elInit = true; $("elYear").value = schoolYearNow(); }
-  const rows = enrolledRecords(), xf = colFields(), ef = S.fields.enroll, n = 14 + xf.length + ef.length;
+  const rows = enrolledRecords(), xf = colFields(), ef = S.fields.enroll, n = 15 + xf.length + ef.length;
   $("elCnt").textContent = `(${new Set(S.enrollments.filter((e) => !e.remark).map((e) => e.registryId)).size})`;
   $("elCount").textContent = `${rows.length} enrolled student${rows.length === 1 ? "" : "s"} - ${rows.filter(isM).length} male, ${rows.filter(isF).length} female` + (rows.length > 12 ? " - scroll the list to see all" : "");
-  $("elTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Cluster / strand</th><th>Section</th><th>Learning modality</th><th>Term / quarter</th><th>School year</th><th>Voucher</th><th>Gender</th><th>Birthdate</th><th>Age</th><th>Remark</th>" +
+  $("elTbl").innerHTML = "<tr><th>Student ID No.</th><th>LRN</th><th>Name</th><th>Grade</th><th>Cluster / strand</th><th>Section</th><th>Learning modality</th><th>Term / quarter</th><th>School year</th><th>Voucher</th><th>Gender</th><th>Birthdate</th><th>Age</th><th>Enrollment status</th><th>Remark</th>" +
     [...xf, ...ef].map((f) => `<th>${esc(f.label)}</th>`).join("") + "<th></th></tr>" +
     (rows.slice(0, 3000).map(({ r, e, terms, years }) => `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.lrn || "-")}</td><td>${esc(r.name)}</td><td>${esc(e.gradeLevel || r.gradeLevel || "")}</td><td>${esc(e.strand || "-")}</td><td>${esc(e.sectionName || "")}</td><td>${esc(e.modality || "-")}</td>` +
-      `<td>${esc(terms.join(", "))}</td><td>${esc(years.join(", "))}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(r.gender || "")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td>` +
+      `<td>${esc(terms.join(", "))}</td><td>${esc(years.join(", "))}</td><td>${esc(r.voucherType || "-")}</td><td>${esc(r.gender || "")}</td><td>${esc(bd(r.birthday))}</td><td>${ageOf(r.birthday)}</td><td>${statusBadge(statusOf(r))}</td>` +
       `<td>${e.remark ? `<span class="badge warn">${esc(e.remark)}</span>${e.remarkDate ? `<small>${esc(bd(e.remarkDate))}</small>` : ""}` : "-"}</td>` +
       xf.map((f) => `<td>${esc((r.extra || {})[f.id] ?? "")}</td>`).join("") + ef.map((f) => `<td>${esc((e.extra || {})[f.id] ?? "")}</td>`).join("") +
       `<td class="actions"><button class="btn small" data-ed="${esc(r.id)}">Edit</button><button class="btn small" data-rk="${esc(r.id)}">Remark</button><button class="btn small" data-hi="${esc(r.id)}">History</button><button class="btn small danger" data-rm="${esc(r.id)}">Delete</button></td></tr>`).join("") || emptyRow(n, "No enrolled students found."));
@@ -508,13 +542,14 @@ $("rmSave").onclick = () => run(async () => {
   if (dropAcc) await callFn("registrarDropStudentAccount", { registryId: t.r.id });
   const patchRec = remark ? { remark, remarkDate: date, remarkNote: note, remarkBy: profile.displayName || "", updatedAt: serverTimestamp() } : { remark: deleteField(), remarkDate: deleteField(), remarkNote: deleteField(), remarkBy: deleteField(), updatedAt: serverTimestamp() };
   for (const e of t.recs) await updateDoc(doc(db, "enrollmentRecords", e.id), patchRec);
+  await updateDoc(doc(db, "registry", t.r.id), { enrollStatus: remark || "Enrolled", enrollStatusDate: remark ? date : localDate(), enrollStatusNote: remark ? note : "", enrollStatusBy: profile.displayName || "", updatedAt: serverTimestamp() });
   await logEvent(remark ? "Set remark" : "Cleared remark", "enrollment", `${t.r.name} (${t.r.studentNo})`, [{ f: "Remark", from: (t.recs.find((e) => e.remark) || {}).remark || "", to: remark }], `${t.year}${note ? " - " + note : ""}${dropAcc ? " - login account deleted" : ""}`);
   rmTarget = null; $("rmBox").hidden = true; $("rmNone").hidden = false; await refresh(); show("enrolled", "elList");
   flash(remark ? `${t.r.name}: ${remark}.${dropAcc ? " The login account was deleted." : ""}` : `The remark of ${t.r.name} was cleared.`, true);
 });
 
 /* ======================= HISTORY LOG ======================= */
-const ACTIONS = ["Registered student", "Edited student", "Deleted student", "Set remark", "Cleared remark", "Enrolled student", "Removed from section", "Added section", "Changed adviser", "Deleted section", "Imported list", "Changed settings"];
+const ACTIONS = ["Registered student", "Edited student", "Deleted student", "Set remark", "Cleared remark", "Enrolled student", "Removed from section", "Added section", "Changed adviser", "Deleted section", "Imported list", "Updated requirements", "Changed enrollment status", "Changed settings"];
 const atsec = (l) => l?.at?.seconds || 0;
 const whenOf = (l) => (atsec(l) ? new Date(atsec(l) * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "just now");
 S.log = []; S.logLoaded = false;
@@ -666,10 +701,10 @@ async function enrollOne(r, c, rowExtra) {
   b.set(doc(db, "enrollmentRecords", eid), { schoolId: SID, registryId: r.id, studentNo: r.studentNo, lrn: r.lrn || "", examNo, name: r.name, birthday: r.birthday || "", gender: r.gender || "",
     gradeLevel: c.gradeLevel, term: c.term, schoolYear: c.schoolYear, strand: c.strand || "", modality: c.modality || "", sectionId: sec.id, sectionName: sec.name, adviserUid: sec.ownerUid, adviserName: sec.adviserName || "",
     extra: { ...(c.extra || {}), ...Object.fromEntries(Object.entries(rowExtra || {}).filter(([, v]) => v)) }, createdBy: user.uid, createdAt: serverTimestamp() }, { merge: true });
-  b.update(doc(db, "registry", r.id), { examNo, gradeLevel: c.gradeLevel, updatedAt: serverTimestamp() });
+  b.update(doc(db, "registry", r.id), { examNo, gradeLevel: c.gradeLevel, enrollStatus: "Enrolled", enrollStatusDate: localDate(), updatedAt: serverTimestamp() });
   try { await b.commit(); }
   catch (e) { if (e.code === "permission-denied") throw new Error(`${r.name}: the Exam ID No. ${examNo} is already used by a student of another school, or you do not have permission.`); throw e; }
-  r.examNo = examNo; r.gradeLevel = c.gradeLevel;
+  r.examNo = examNo; r.gradeLevel = c.gradeLevel; r.enrollStatus = "Enrolled";
 }
 $("enSave").onclick = () => run(async () => {
   const r = S.registry.find((x) => x.id === $("enStu").value); if (!r) return flash("Find and choose a registered student first.");
@@ -695,7 +730,144 @@ async function unenroll(id) {
     if (rest) { const s = S.sections.find((x) => x.id === rest.sectionId); if (s) await updateDoc(ref, { ownerUid: s.ownerUid, classId: s.id, className: s.name, updatedAt: serverTimestamp() }); }
     else { try { await deleteDoc(ref); } catch { await updateDoc(ref, { classId: "", className: "", updatedAt: serverTimestamp() }); } } // an activated account keeps its record, without a section
   } catch { /* record already gone */ }
+  if (!rest) await updateDoc(doc(db, "registry", e.registryId), { enrollStatus: "Not Enrolled", enrollStatusDate: localDate(), updatedAt: serverTimestamp() }).catch(() => {});
   await refresh(); flash(`${e.name} was removed from ${e.sectionName}.`, 1);
 }
+
+/* ======================= SCHOOL REQUIREMENTS (checklist after registration) + EDITABLE ENROLLMENT STATUS ======================= */
+let rqSel = "";
+const rqRows = () => {
+  const q = $("rqQ").value.trim().toLowerCase(), y = $("rqYear").value, g = $("rqGrade").value, st = $("rqStatus").value, ck = $("rqCheck").value;
+  return S.registry.filter((r) => {
+    if ((y && r.schoolYear !== y) || (g && r.gradeLevel !== g) || (st && statusOf(r) !== st) || (q && ![r.studentNo, r.lrn, r.name].join(" ").toLowerCase().includes(q))) return false;
+    const n = reqCount(r);
+    return !ck || (ck === "complete" ? reqDone(r) : ck === "incomplete" ? !reqDone(r) : n === 0);
+  });
+};
+function renderReqs() {
+  const rows = rqRows(), done = S.registry.filter(reqDone).length;
+  $("rqCnt").textContent = `(${S.registry.length})`;
+  $("rqCount").textContent = `${rows.length} of ${S.registry.length} registered students - ${done} with a complete checklist` + (rows.length > 12 ? " - scroll the list to see all" : "");
+  $("rqTbl").innerHTML = "<tr><th>Student ID No.</th><th>Name</th><th>Grade</th><th>School year</th><th>Documents submitted</th><th>Enrollment status</th><th></th></tr>" +
+    (rows.slice(0, 3000).map((r) => `<tr><td>${esc(r.studentNo)}</td><td>${esc(r.name)}</td><td>${esc(r.gradeLevel || "")}</td><td>${esc(r.schoolYear || "-")}</td>
+      <td><span class="prog">${esc(reqText(r))}</span>${bar(reqCount(r), S.reqs.length)} ${reqDone(r) ? '<span class="badge st-enrolled">Complete</span>' : ""}</td><td>${statusBadge(statusOf(r))}</td>
+      <td class="actions"><button class="btn small primary" data-rqo="${esc(r.id)}">Checklist / status</button><button class="btn small" data-en="${esc(r.id)}">Enroll</button></td></tr>`).join("") || emptyRow(7, "No students found."));
+  if (rqSel && !S.registry.some((r) => r.id === rqSel)) rqSel = "";
+  if (!rqSel) { $("rqDetail").hidden = true; $("rqListBox").hidden = false; }
+}
+["rqQ", "rqYear", "rqGrade", "rqStatus", "rqCheck"].forEach((i) => ($(i).oninput = renderReqs));
+$("rqClear").onclick = () => { ["rqQ", "rqYear", "rqGrade", "rqStatus", "rqCheck"].forEach((i) => ($(i).value = "")); renderReqs(); };
+$("rqTbl").onclick = (e) => {
+  const o = e.target.closest("[data-rqo]"), en = e.target.closest("[data-en]");
+  if (o) { const r = S.registry.find((x) => x.id === o.dataset.rqo); if (r) openChecklist(r); }
+  else if (en) { const r = S.registry.find((x) => x.id === en.dataset.en); if (r) { show("enroll", "enForm"); $("enQ").value = r.studentNo; renderEnrollPicker(r.id); } }
+};
+function openChecklist(r) {
+  rqSel = r.id; const cur = r.reqs || {};
+  show("reqs");
+  $("rqListBox").hidden = true; $("rqDetail").hidden = false;
+  $("rqHead").textContent = `Checklist - ${r.name}`;
+  $("rqInfo").innerHTML = [["Student ID No.", r.studentNo], ["LRN", r.lrn || "- (none yet)"], ["Grade level", r.gradeLevel || "-"], ["School year", r.schoolYear || "-"], ["Guardian", r.guardianName || r.mother || r.father || "-"], ["Guardian contact", r.guardianContact || r.contact || "-"], ["Documents", reqText(r)]]
+    .map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+  const known = new Set(S.reqs.map((q) => q.id)), gone = Object.keys(cur).filter((k) => !known.has(k));   // submitted items whose requirement was later removed from the list
+  $("rqItems").innerHTML = S.reqs.map((q) => itemHtml(q.id, q.label, cur[q.id])).join("") + gone.map((k) => itemHtml(k, (cur[k].label || "Other document") + " (no longer on the list)", cur[k])).join("");
+  const stNow = statusOf(r), last = r.enrollStatusDate || "";
+  $("rqDStatus").value = stNow; $("rqDDate").value = last || localDate(); $("rqDNote").value = r.enrollStatusNote || "";
+  statusHint();
+  scrollTo({ top: 0, behavior: "smooth" });
+}
+function itemHtml(id, label, v) {
+  const on = !!v;
+  return `<div class="reqitem ${on ? "done" : ""}" data-rq="${esc(id)}" data-label="${esc(label)}"><label class="chk"><input type="checkbox" data-rc ${on ? "checked" : ""}> ${esc(label)}</label>
+    <input type="date" data-rd value="${esc((v && v.d) || "")}" aria-label="Date submitted: ${esc(label)}" class="${on ? "" : "off"}"><input type="text" data-rn maxlength="120" placeholder="Note (optional)" value="${esc((v && v.n) || "")}" aria-label="Note: ${esc(label)}" class="${on ? "" : "off"}"></div>`;
+}
+$("rqItems").onchange = (e) => {
+  const c = e.target.closest("[data-rc]"); if (!c) return;
+  const row = c.closest(".reqitem"), d = row.querySelector("[data-rd]"), n = row.querySelector("[data-rn]");
+  row.classList.toggle("done", c.checked); d.classList.toggle("off", !c.checked); n.classList.toggle("off", !c.checked);
+  if (c.checked && !d.value) d.value = localDate();
+  if (!c.checked) { d.value = ""; n.value = ""; }
+};
+const setAll = (on) => document.querySelectorAll("#rqItems [data-rc]").forEach((c) => { c.checked = on; c.dispatchEvent(new Event("change", { bubbles: true })); });
+$("rqAll").onclick = () => setAll(true); $("rqNone").onclick = () => setAll(false);
+$("rqBack").onclick = () => { rqSel = ""; renderReqs(); };
+$("rqEnroll").onclick = () => { const r = S.registry.find((x) => x.id === rqSel); if (!r) return; show("enroll", "enForm"); $("enQ").value = r.studentNo; renderEnrollPicker(r.id); };
+function statusHint() {
+  const r = S.registry.find((x) => x.id === rqSel); if (!r) return;
+  const all = [...document.querySelectorAll("#rqItems [data-rc]")], done = all.filter((c) => c.checked).length, st = $("rqDStatus").value;
+  $("rqStHint").textContent = (done === all.length && all.length ? "All documents are submitted. " : `${done} of ${all.length} documents submitted. `) +
+    (st === "Enrolled" ? "To make a student Enrolled, enroll him or her in a section (Enrollment tab); the status then changes by itself." : REMARKS.includes(st) ? "This also puts the remark on the student's enrollment record for the latest school year (the student's login account is not deleted here; use Remark in the Enrolled masterlist for that)." : "");
+}
+$("rqDStatus").onchange = statusHint; $("rqItems").addEventListener("change", statusHint);
+
+/** Changes the enrollment status. "Enrolled" comes from enrolling in a section; the three remarks are also written to the enrollment records, so the dashboard and lists agree. */
+async function applyStatus(r, status, date, note) {
+  const mine = S.enrollments.filter((e) => e.registryId === r.id), year = [...mine].sort((a, b) => (b.schoolYear || "").localeCompare(a.schoolYear || "") || termRank(b.term) - termRank(a.term))[0]?.schoolYear || "";
+  const recs = mine.filter((e) => (e.schoolYear || "") === year);
+  if (status === "Enrolled" && !mine.some((e) => !e.remark)) throw new Error("This student is not enrolled in a section yet. Use Go to enrollment: once enrolled, the status becomes Enrolled by itself.");
+  if ((status === "Pending" || status === "Not Enrolled") && mine.some((e) => !e.remark)) throw new Error(`${r.name} is enrolled in a section, so the status cannot be ${status}. Remove the student from the section first (Sections & advisers), or choose Transferred Out / Drop Out / Cancelled Enrolled.`);
+  const from = statusOf(r);
+  if (REMARKS.includes(status)) { for (const e of recs) await updateDoc(doc(db, "enrollmentRecords", e.id), { remark: status, remarkDate: date, remarkNote: note, remarkBy: profile.displayName || "", updatedAt: serverTimestamp() }); }
+  await updateDoc(doc(db, "registry", r.id), { enrollStatus: status, enrollStatusDate: date, enrollStatusNote: note, enrollStatusBy: profile.displayName || "", updatedAt: serverTimestamp() });
+  await logEvent("Changed enrollment status", "student", `${r.name} (${r.studentNo})`, [{ f: "Enrollment status", from, to: status }], `${date}${note ? " - " + note : ""}${REMARKS.includes(status) && recs.length ? " - remark set on " + year : ""}`);
+}
+$("rqSave").onclick = () => run(async () => {
+  const r = S.registry.find((x) => x.id === rqSel); if (!r) return flash("Choose a student first.");
+  const old = r.reqs || {}, next = {};
+  document.querySelectorAll("#rqItems .reqitem").forEach((row) => {
+    if (!row.querySelector("[data-rc]").checked) return;
+    const id = row.dataset.rq, v = { d: row.querySelector("[data-rd]").value || localDate() }, n = row.querySelector("[data-rn]").value.trim();
+    if (n) v.n = n;
+    if (!S.reqs.some((q) => q.id === id)) v.label = row.dataset.label.replace(/ \(no longer on the list\)$/, "");
+    next[id] = v;
+  });
+  const changes = [], names = Object.fromEntries([...S.reqs.map((q) => [q.id, q.label]), ...Object.keys(old).map((k) => [k, old[k].label || k])]);
+  new Set([...Object.keys(old), ...Object.keys(next)]).forEach((id) => {
+    const a = old[id], b = next[id], lab = (S.reqs.find((q) => q.id === id) || {}).label || names[id] || id;
+    if (!a && b) changes.push({ f: lab, from: "Not submitted", to: "Submitted " + b.d });
+    else if (a && !b) changes.push({ f: lab, from: "Submitted " + a.d, to: "Not submitted" });
+    else if (a && b && (a.d !== b.d || (a.n || "") !== (b.n || ""))) changes.push({ f: lab, from: `${a.d}${a.n ? " - " + a.n : ""}`, to: `${b.d}${b.n ? " - " + b.n : ""}` });
+  });
+  const status = $("rqDStatus").value, date = $("rqDDate").value || localDate(), note = $("rqDNote").value.trim();
+  let said = "";
+  if (changes.length) {
+    await updateDoc(doc(db, "registry", r.id), { reqs: next, reqUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await logEvent("Updated requirements", "student", `${r.name} (${r.studentNo})`, changes);
+    r.reqs = next; said = "Checklist saved. ";
+  }
+  if (status !== statusOf(r) || (REMARKS.includes(status) && (note !== (r.enrollStatusNote || "") || date !== (r.enrollStatusDate || "")))) {
+    try { await applyStatus(r, status, date, note); said += `Status: ${status}.`; }
+    catch (err) { await refresh(); openChecklist(S.registry.find((x) => x.id === r.id) || r); return flash((said || "") + err.message); }
+  }
+  if (!said) return flash("Nothing was changed.");
+  await refresh(); rqSel = ""; renderReqs();
+  flash(`${r.name}: ${said.trim()}${reqDone(S.registry.find((x) => x.id === r.id) || r) && statusOf(S.registry.find((x) => x.id === r.id) || r) === "Pending" ? " The checklist is complete: the student can now be enrolled in a section." : ""}`, true);
+});
+$("rqXlsx").onclick = () => {
+  const rows = rqRows(); if (!rows.length) return flash("There are no students to download with these filters.");
+  const head = ["Student ID No.", "LRN", "Name", "Grade Level", "School Year", "Enrollment Status", "Documents Submitted", "Checklist", ...S.reqs.map((q) => q.label), "Notes"];
+  const data = rows.map((r) => ({ "Student ID No.": r.studentNo, LRN: r.lrn || "", Name: r.name, "Grade Level": r.gradeLevel || "", "School Year": r.schoolYear || "", "Enrollment Status": statusOf(r), "Documents Submitted": reqText(r), Checklist: reqDone(r) ? "Complete" : "Incomplete",
+    ...Object.fromEntries(S.reqs.map((q) => [q.label, (r.reqs || {})[q.id] ? "Submitted " + (r.reqs[q.id].d || "") : "Missing"])),
+    Notes: S.reqs.filter((q) => (r.reqs || {})[q.id]?.n).map((q) => `${q.label}: ${r.reqs[q.id].n}`).join("; ") }));
+  saveXlsx([{ name: "School requirements", rows: data, header: head }], `school-requirements-${$("rqYear").value || "all-years"}-${SID}.xlsx`);
+};
+
+/* settings: the list of required documents */
+function renderReqSettings() {
+  $("rqSetList").innerHTML = S.reqs.map((q) => `<span class="tag">${esc(q.label)}<button type="button" data-rqrm="${esc(q.id)}" aria-label="Remove ${esc(q.label)}">&times;</button></span>`).join("") || '<span class="muted">None yet.</span>';
+}
+$("rqAdd").onclick = () => run(async () => {
+  const v = $("rqNew").value.trim(); if (!v) return flash("Type the name of the requirement.");
+  if (S.reqs.some((q) => q.label.toLowerCase() === v.toLowerCase())) return flash("That requirement is already on the list.");
+  S.reqs.push({ id: "q" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), label: v }); $("rqNew").value = "";
+  await saveSettings(); await logEvent("Changed settings", "settings", "School requirements", [{ f: "Requirement", from: "", to: v }], "Added"); render(); flash("Requirement added.", 1);
+});
+$("rqSetList").onclick = (e) => run(async () => {
+  const b = e.target.closest("[data-rqrm]"); if (!b) return;
+  const q = S.reqs.find((x) => x.id === b.dataset.rqrm); if (!q) return;
+  if (S.reqs.length <= 1) return flash("Keep at least one requirement on the list.");
+  if (!confirm(`Remove "${q.label}" from the list of school requirements? Students who already submitted it keep that record.`)) return;
+  S.reqs = S.reqs.filter((x) => x.id !== q.id); await saveSettings(); await logEvent("Changed settings", "settings", "School requirements", [{ f: "Requirement", from: q.label, to: "" }], "Removed"); render();
+});
 
 refresh();

@@ -1,4 +1,5 @@
 :root{
+  color-scheme:light;
   --red:#b3121f; --red-dark:#8c0e18; --ink:#1a1a1a; --muted:#5f6368;
   --bg:#f3f3f4; --card:#fff; --line:#dcdcde; --ok:#1e7a3c; --warn:#a15c00;
   --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -12,7 +13,7 @@ a{color:var(--red)}
 :focus-visible{outline:3px solid #1a1a1a;outline-offset:2px}
 
 label{display:block;font-weight:600;margin-bottom:1rem}
-input,select{display:block;width:100%;margin-top:.3rem;padding:.65rem .75rem;border:1px solid #8a8a8e;border-radius:6px;font:inherit;background:#fff}
+input,select{display:block;width:100%;margin-top:.3rem;padding:.65rem .75rem;border:1px solid #8a8a8e;border-radius:6px;font:inherit;background:#fff;color:var(--ink)}
 .btn{font:inherit;font-weight:600;padding:.6rem 1rem;border-radius:6px;border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
 .btn:hover{background:#eee} .btn:disabled{opacity:.55;cursor:not-allowed}
 .btn.primary{background:var(--red);border-color:var(--red);color:#fff} .btn.primary:hover{background:var(--red-dark)}
@@ -151,7 +152,7 @@ code.cc{font-weight:700;letter-spacing:.12em;background:#f3f3f4;border:1px solid
 .side .muted{overflow-wrap:anywhere}
 
 /* ---------- v5: filter icon, online exams ---------- */
-textarea{display:block;width:100%;margin-top:.3rem;padding:.65rem .75rem;border:1px solid #8a8a8e;border-radius:6px;font:inherit;background:#fff;resize:vertical;font-weight:400}
+textarea{display:block;width:100%;margin-top:.3rem;padding:.65rem .75rem;border:1px solid #8a8a8e;border-radius:6px;font:inherit;background:#fff;color:var(--ink);resize:vertical;font-weight:400}
 label.chk{display:flex;gap:.5rem;align-items:flex-start;font-weight:600}
 label.chk input{width:auto;margin:.25rem 0 0}
 .listbar{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin:1rem 0 .4rem}
@@ -506,3 +507,32 @@ tr.voided td{color:#888;text-decoration:line-through} tr.voided td.actions,tr.vo
 .feegrid input{width:7.5rem;text-align:right}
 .matrix td small{display:block;color:var(--muted);font-size:.72rem;white-space:normal}
 @media print{.dgrid{display:block}}
+
+/* ---------- drop-down lists: always dark text on a white list, in any browser / operating-system theme (wide screens included) ---------- */
+select,select option,select optgroup,datalist option{color:var(--ink);background-color:#fff}
+select option:checked,select option:hover{color:#fff;background-color:var(--red)}
+input::placeholder,textarea::placeholder{color:#767676;opacity:1}
+select:disabled,input:disabled,textarea:disabled{color:#555;background-color:#f1f1f2}
+@media (prefers-color-scheme:dark){
+  select,select option,select optgroup,input,textarea,datalist option{color:#1a1a1a!important;background-color:#fff!important}
+  select option:checked,select option:hover{color:#fff!important;background-color:#b3121f!important}
+  select:disabled,input:disabled,textarea:disabled{color:#555!important;background-color:#f1f1f2!important}
+}
+
+/* ---------- school requirements checklist, status, custodian / guidance pages ---------- */
+.badge.st-pending{color:var(--warn);border-color:var(--warn)} .badge.st-enrolled{color:var(--ok);border-color:var(--ok)} .badge.st-not{color:#555;border-color:#888}
+.badge.st-out{color:var(--red);border-color:var(--red)} .badge.st-open{color:var(--red);border-color:var(--red)} .badge.st-going{color:var(--warn);border-color:var(--warn)} .badge.st-done{color:var(--ok);border-color:var(--ok)} .badge.st-ref{color:#1a3f9c;border-color:#1a3f9c}
+.reqlist{display:grid;gap:.5rem;margin:.6rem 0}
+.reqitem{display:grid;grid-template-columns:minmax(14rem,2fr) minmax(9rem,1fr) minmax(10rem,2fr);gap:.6rem;align-items:center;border:1px solid var(--line);border-left:4px solid var(--line);border-radius:6px;padding:.5rem .7rem;background:#fff}
+.reqitem.done{border-left-color:var(--ok);background:#f4fbf6}
+.reqitem label.chk{display:flex;align-items:center;gap:.6rem;margin:0;font-weight:600}
+.reqitem label.chk input{width:1.25rem;height:1.25rem;margin:0;flex:none}
+.reqitem input[type=date],.reqitem input[type=text]{margin:0;padding:.4rem .5rem}
+.reqitem .off{visibility:hidden}
+@media screen and (max-width:760px){.reqitem{grid-template-columns:1fr}.reqitem .off{display:none}}
+.prog{display:inline-block;min-width:3.2rem;font-variant-numeric:tabular-nums;font-weight:600}
+.matrix td.ok{color:var(--ok);font-weight:700} .matrix td.no{color:#999} .matrix td.bad{color:var(--red);font-weight:700}
+.wrapcell{white-space:normal;min-width:14rem;max-width:26rem}
+textarea.tall{min-height:5.2rem}
+.row label.wide2{flex:2 1 24rem} .row label.full{flex:1 1 100%}
+.notice.info{background:#eef3ff;border-color:#a9b9e8;color:#1a3f9c}

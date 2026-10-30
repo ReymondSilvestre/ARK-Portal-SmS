@@ -23,10 +23,11 @@ var BLOB_MIN = 20000;                   // bigger text fields (module file piece
 var KNOWN = ['schools', 'users', 'auditLogs', 'systemSettings', 'counters', 'classCodes', 'enrollments', 'teacherLinks', 'students',
   'scanResults', 'modules', 'moduleChunks', 'examPapers', 'examKeys', 'examSubmissions', 'examAttempts', 'classes', 'registry',
   'enrollmentRecords', 'registrarSettings', 'registrarLog', 'payments', 'studentAccounts', 'financeSettings', 'financeLog',
-  'examinations', 'answerKeys', 'answerSheets'];
+  'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog'];
 var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'examKeys', 'examPapers', 'moduleChunks', 'modules',
   'examinations', 'answerKeys', 'answerSheets', 'enrollments', 'teacherLinks', 'classCodes', 'students', 'classes',
-  'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog'];
+  'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog',
+  'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog'];
 
 /* ============================== helpers ============================== */
 function fail(code, message) { var e = new Error(message || code); e.code = code; throw e; }
@@ -261,7 +262,7 @@ function makeS(actor, now) {
   S.live = S.hasProfile && me.status === 'active' && me.mustChangePassword !== true && S.schoolLive;
   S.isSuper = S.live && me.role === 'superadmin'; S.isAdmin = S.live && me.role === 'admin';
   S.isTeacher = S.live && me.role === 'teacher'; S.isRegistrar = S.live && me.role === 'registrar';
-  S.isFinance = S.live && me.role === 'finance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
+  S.isFinance = S.live && me.role === 'finance'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
   S.get = function (c, id) { return isStr(id) && id ? getDoc(c, id) : null; };
   S.exists = function (c, id) { return !!S.get(c, id); };
   S.validAdviser = function (uid) { var u = S.get('users', uid); return !!u && u.role === 'teacher' && u.schoolId === S.sid; };
@@ -298,12 +299,12 @@ var RULES = {
     create: function () { return false; },     // accounts are made by the createAccount action only
     update: function (S, id, o, n) {
       var df = diffKeys(o, n);
-      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o) && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0) ||
+      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o) && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0) ||
         (S.isSuper && o.role === 'admin' && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0);
     },
     del: function (S, id, o) {
-      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o)) ||
-        (S.isSuper && ['admin', 'teacher', 'registrar', 'finance', 'student'].indexOf(o.role) >= 0) ||
+      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o)) ||
+        (S.isSuper && ['admin', 'teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0) ||
         (S.isStaff && o.role === 'student' && S.studentRec(o.studentId).ownerUid === S.uid);
     }
   },
@@ -425,13 +426,13 @@ var RULES = {
     del: function (S, id, o) { return (S.isRegistrar && S.inMySchool(o)) || (S.isStaff && o.ownerUid === S.uid) || S.isSuper; }
   },
   registry: {
-    read: function (S, d) { return ((S.isRegistrar || S.isAdmin || S.isFinance) && S.inMySchool(d)) || S.isSuper; },
+    read: function (S, d) { return ((S.isRegistrar || S.isAdmin || S.isFinance || S.isCustodian || S.isGuidance) && S.inMySchool(d)) || S.isSuper; },
     create: function (S, id, n) { return S.isRegistrar && n.schoolId === S.sid && n.createdBy === S.uid; },
     update: function (S, id, o, n) { return S.isRegistrar && S.inMySchool(o) && n.schoolId === S.sid; },
     del: function (S, id, o) { return (S.isRegistrar && S.inMySchool(o)) || S.isSuper; }
   },
   enrollmentRecords: {
-    read: function (S, d) { return ((S.isRegistrar || S.isAdmin || S.isFinance) && S.inMySchool(d)) || S.isSuper; },
+    read: function (S, d) { return ((S.isRegistrar || S.isAdmin || S.isFinance || S.isCustodian || S.isGuidance) && S.inMySchool(d)) || S.isSuper; },
     create: function (S, id, n) { return S.isRegistrar && n.schoolId === S.sid && S.validAdviser(n.adviserUid); },
     update: function (S, id, o, n) { return S.isRegistrar && S.inMySchool(o) && n.schoolId === S.sid && S.validAdviser(n.adviserUid); },
     del: function (S, id, o) { return (S.isRegistrar && S.inMySchool(o)) || S.isSuper; }
@@ -473,6 +474,35 @@ var RULES = {
     del: function (S) { return S.isSuper; }
   }
 };
+
+/* ---- Custodian (uniforms, P.E. uniforms, IDs ...) and Guidance (health + guidance records): each sees only their own school's records ---- */
+function ownRoleRules(flag) {
+  return {
+    read: function (S, d) { return (S[flag] && S.inMySchool(d)) || S.isSuper; },
+    create: function (S, id, n) { return S[flag] && n.schoolId === S.sid && n.createdBy === S.uid; },
+    update: function (S, id, o, n) { return S[flag] && S.inMySchool(o) && n.schoolId === S.sid; },
+    del: function (S, id, o) { return (S[flag] && S.inMySchool(o)) || S.isSuper; }
+  };
+}
+function ownRoleSettings(flag) {
+  return {
+    read: function (S, d, id) { return (S[flag] && id === S.sid) || S.isSuper; },
+    create: function (S, id, n) { return S[flag] && id === S.sid && n.schoolId === S.sid; },
+    update: function (S, id, o, n) { return S[flag] && id === S.sid && n.schoolId === S.sid; },
+    del: function (S) { return S.isSuper; }
+  };
+}
+function ownRoleLog(flag) {
+  return {
+    read: function (S, d) { return (S[flag] && S.inMySchool(d)) || S.isSuper; },
+    create: function (S, id, n) { return S[flag] && n.schoolId === S.sid && n.byUid === S.uid; },
+    update: function () { return false; },
+    del: function (S) { return S.isSuper; }
+  };
+}
+RULES.custodianRecords = ownRoleRules('isCustodian'); RULES.custodianSettings = ownRoleSettings('isCustodian'); RULES.custodianLog = ownRoleLog('isCustodian');
+RULES.healthRecords = ownRoleRules('isGuidance'); RULES.guidanceRecords = ownRoleRules('isGuidance');
+RULES.guidanceSettings = ownRoleSettings('isGuidance'); RULES.guidanceLog = ownRoleLog('isGuidance');
 ['examinations', 'answerKeys', 'answerSheets'].forEach(function (c) {
   RULES[c] = {
     read: function (S, d) { return S.isSuper || (S.isStaff && S.mayRead(d)) || (S.isAdmin && S.inMySchool(d)); },
@@ -664,7 +694,7 @@ function actCreateAccount(actor, p) {
     keys = [email];
     doc = { uid: '', role: 'admin', displayName: String(p.displayName || '').trim(), email: email, schoolId: code, schoolName: name, status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
     school = { name: name, code: code, adminEmail: email, status: 'active', createdAt: { __ts: now }, createdBy: actor.uid };
-  } else if (['teacher', 'registrar', 'finance'].indexOf(role) >= 0) {
+  } else if (['teacher', 'registrar', 'finance', 'custodian', 'guidance'].indexOf(role) >= 0) {
     if (!S.isAdmin) deny();
     var emp = String(p.employeeId || '').trim(), sc = getDoc('schools', S.sid) || {};
     if (!emp) fail('invalid-argument', 'Enter the Employee No.');
@@ -700,12 +730,12 @@ function actCreateAccount(actor, p) {
 function canManage(actor, t) {
   var me = actor.me;
   if (me.role === 'superadmin') return t.role === 'admin';
-  if (me.role === 'admin') return ['teacher', 'registrar', 'finance', 'student'].indexOf(t.role) >= 0 && t.schoolId === me.schoolId;
+  if (me.role === 'admin') return ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(t.role) >= 0 && t.schoolId === me.schoolId;
   return false;
 }
 function actSetPassword(actor, p) {
   var S = makeS(actor); if (!S.isSuper && !S.isAdmin) deny();
-  var t = getDoc('users', String(p.uid || '')); if (!t || ['admin', 'teacher', 'registrar', 'finance', 'student'].indexOf(t.role) < 0) fail('not-found', 'That account was not found.');
+  var t = getDoc('users', String(p.uid || '')); if (!t || ['admin', 'teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(t.role) < 0) fail('not-found', 'That account was not found.');
   if (!canManage(actor, t)) fail('permission-denied', 'You cannot reset that account.');
   var pw = p.password;
   if (p.useDefault) {
@@ -811,6 +841,204 @@ function actAllocIds(actor, p) {
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
 }
 
+/* ============================== the readable Records sheet ==============================
+   A SECOND Google Sheet, written for people: one row per record, plain words, one column per fact (no code, no formulas).
+   The Registrar, Finance, Custodian and Guidance each get their own tabs. The portal still works from the first (technical) sheet;
+   this one is a copy that is kept up to date every time somebody saves, edits or deletes a record.
+   Create it once from the menu:  ARK Portal > 4. Create the readable Records sheet. */
+var REC_ID_HEAD = 'Record ID (please do not change)';
+var REC_DEFAULT_REQS = [
+  { id: 'form138', label: 'Form 138 / Report Card' }, { id: 'psa', label: 'PSA Birth Certificate' }, { id: 'goodmoral', label: 'Good Moral Certificate' },
+  { id: 'form137', label: 'Form 137 / SF10 (Permanent Record)' }, { id: 'pictures', label: '2x2 ID Pictures' }, { id: 'enrollform', label: 'Signed Enrollment Form' },
+  { id: 'transfer', label: 'Certificate of Transfer (transferees only)' }];
+var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function rcx() { return { sch: {}, set: {} }; }
+function rSchool(cx, sid) {
+  if (!(sid in cx.sch)) { var s = sid ? getDoc('schools', sid) : null; cx.sch[sid] = s ? (s.displayName || s.name || sid) : (sid || ''); }
+  return cx.sch[sid];
+}
+function rSettings(cx, coll, sid) {
+  var k = coll + '|' + sid; if (!(k in cx.set)) cx.set[k] = (sid && getDoc(coll, sid)) || {}; return cx.set[k];
+}
+function rDate(s) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? MONTHS[+m[2] - 1] + ' ' + (+m[3]) + ', ' + m[1] : String(s || ''); }
+function rTs(v) {
+  var ms = tsOf(v); if (typeof ms !== 'number' || !ms) return '';
+  return Utilities.formatDate(new Date(ms), Session.getScriptTimeZone() || 'Asia/Manila', 'MMM d, yyyy h:mm a');
+}
+function rAge(b) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(b || '')); if (!m) return '';
+  var t = new Date(), a = t.getFullYear() - +m[1];
+  if (t.getMonth() + 1 < +m[2] || (t.getMonth() + 1 === +m[2] && t.getDate() < +m[3])) a--;
+  return a >= 0 && a < 120 ? String(a) : '';
+}
+function rMoney(n) { n = Number(n) || 0; return 'PHP ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function rYN(v) { return v === true || v === 'Yes' ? 'Yes' : v === false || v === 'No' ? 'No' : String(v || ''); }
+function rUnit(v, u) { return v === undefined || v === null || v === '' ? '' : v + ' ' + u; }
+function rBmi(h, w) { h = +h; w = +w; return h > 0 && w > 0 ? (Math.round(w / Math.pow(h / 100, 2) * 10) / 10) + '' : ''; }
+function rExtra(extra, fields) {
+  extra = extra || {};
+  return (fields || []).map(function (f) { var v = extra[f.id]; return v === undefined || v === '' || v === null ? '' : f.label + ': ' + (f.type === 'date' ? rDate(v) : v); }).filter(String).join('; ');
+}
+function rReqs(cx, sid) { var s = rSettings(cx, 'registrarSettings', sid); return s.requirements && s.requirements.length ? s.requirements : REC_DEFAULT_REQS; }
+function rRegFields(cx, sid, groups) { var f = rSettings(cx, 'registrarSettings', sid).fields || {}, out = []; groups.forEach(function (g) { out = out.concat(f[g] || []); }); return out; }
+function rKindFields(cx, coll, sid, kind) { return ((rSettings(cx, coll, sid).fields || {})[kind]) || []; }
+function rReqLists(d, reqs) {
+  var have = d.reqs || {}, ok = [], miss = [], notes = [];
+  reqs.forEach(function (r) {
+    var x = have[r.id];
+    if (x) { ok.push(r.label + (x.d ? ' (' + rDate(x.d) + ')' : '')); if (x.n) notes.push(r.label + ': ' + x.n); } else miss.push(r.label);
+  });
+  return { ok: ok, miss: miss, notes: notes, n: ok.length, total: reqs.length };
+}
+
+var REC = {
+  regStudents: { src: 'registry', tab: 'Registrar - Students', wide: [15, 16, 17, 18, 19, 20, 24],
+    head: ['School', 'Student ID No.', 'LRN', 'Last name', 'First name', 'Middle name', 'Suffix', 'Birthdate', 'Age', 'Gender', 'Grade level', 'School year registered', 'Voucher type', 'Contact No.', 'Address',
+      "Father's name", "Mother's name", "Guardian's name", 'Guardian contact No.', "Guardian's address", 'Exam ID No. (login)', 'Enrollment status', 'Additional information', 'Last updated'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), d.studentNo, d.lrn, d.lastName, d.firstName, d.middleName, d.suffix, rDate(d.birthday), rAge(d.birthday), d.gender, d.gradeLevel, d.schoolYear, d.voucherType, d.contact, d.address,
+        d.father, d.mother, d.guardianName, d.guardianContact, d.guardianAddress, d.examNo, d.enrollStatus || 'Pending', rExtra(d.extra, rRegFields(cx, d.schoolId, ['reg', 'master'])), rTs(d.updatedAt || d.createdAt)];
+    } },
+  regReqs: { src: 'registry', tab: 'Registrar - Requirements', wide: [9, 10, 11],
+    head: ['School', 'Student ID No.', 'Student name', 'Grade level', 'School year', 'Enrollment status', 'Documents submitted (count)', 'Checklist result', 'Documents submitted (with dates)', 'Documents still missing', 'Notes', 'Checklist last updated'],
+    row: function (d, id, cx) {
+      var L = rReqLists(d, rReqs(cx, d.schoolId));
+      return [rSchool(cx, d.schoolId), d.studentNo, d.name, d.gradeLevel, d.schoolYear, d.enrollStatus || 'Pending', L.n + ' of ' + L.total, L.n >= L.total && L.total ? 'Complete' : 'Incomplete', L.ok.join('; '), L.miss.join('; '), L.notes.join('; '), rTs(d.reqUpdatedAt)];
+    } },
+  regEnroll: { src: 'enrollmentRecords', tab: 'Registrar - Enrollment', wide: [16],
+    head: ['School', 'Student ID No.', 'LRN', 'Student name', 'Gender', 'Grade level', 'Section', 'Cluster / strand', 'Term / quarter', 'School year', 'Learning modality', 'Adviser', 'Remark', 'Remark date', 'Remark note', 'Additional information', 'Enrolled on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), d.studentNo, d.lrn, d.name, d.gender, d.gradeLevel, d.sectionName, d.strand, d.term, d.schoolYear, d.modality, d.adviserName, d.remark, rDate(d.remarkDate), d.remarkNote, rExtra(d.extra, rRegFields(cx, d.schoolId, ['enroll'])), rTs(d.createdAt)];
+    } },
+  finPay: { src: 'payments', tab: 'Finance - Payments', wide: [13],
+    head: ['School', 'Date of payment', 'Receipt / OR No.', 'Student ID No.', 'Student name', 'Grade level', 'School year', 'Voucher type', 'Payment for', 'Amount paid', 'Status', 'Reason (if voided)', 'Remarks', 'Recorded by', 'Recorded on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), rDate(d.date), d.receiptNo, d.studentNo, d.name, d.gradeLevel, d.schoolYear, d.voucherType, d.type, rMoney(d.amount), d.status === 'void' ? 'Voided' : 'Paid', d.voidReason, d.remarks, d.createdByName, rTs(d.createdAt)];
+    } },
+  finBal: { src: 'studentAccounts', tab: 'Finance - Balances', wide: [11],
+    head: ['School', 'School year', 'Student ID No.', 'Student name', 'Grade level', 'Voucher type', 'Section', 'Total to pay', 'Total paid', 'Balance', 'Breakdown', 'Payment status'],
+    row: function (d, id, cx) {
+      var due = +d.totalDue || 0, paid = +d.totalPaid || 0, bal = +d.balance || 0;
+      var st = !due ? 'No fees set' : bal <= 0 ? 'Fully paid' : paid > 0 ? 'Partly paid' : 'No payment yet';
+      return [rSchool(cx, d.schoolId), d.schoolYear, d.studentNo, d.name, d.gradeLevel, d.voucherType, d.section, rMoney(due), rMoney(paid), rMoney(Math.max(0, bal)),
+        (d.lines || []).map(function (l) { return l.type + ': to pay ' + rMoney(l.due) + ', paid ' + rMoney(l.paid); }).join('; '), st];
+    } },
+  cusItems: { src: 'custodianRecords', tab: 'Custodian - Items', wide: [13, 14],
+    head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Item', 'Status', 'Size / details', 'Quantity', 'Date returned', 'Received by', 'Remarks', 'Additional information', 'Recorded by', 'Recorded on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.item, d.status, d.size, d.qty, rDate(d.dateReturned), d.receivedBy, d.remarks, rExtra(d.extra, rKindFields(cx, 'custodianSettings', d.schoolId, 'items')), d.createdByName, rTs(d.createdAt)];
+    } },
+  guiHealth: { src: 'healthRecords', tab: 'Guidance - Health', wide: [14, 15, 16, 17, 18],
+    head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Kind of record', 'Height', 'Weight', 'BMI', 'Vision', 'Hearing', 'Allergies', 'Medical conditions', 'Medicines taken', 'Immunization', 'Findings / complaint', 'Treatment / action', 'Health status', 'Follow-up date', 'Additional information', 'Recorded by', 'Recorded on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.type, rUnit(d.height, 'cm'), rUnit(d.weight, 'kg'), rBmi(d.height, d.weight), d.vision, d.hearing, d.allergies, d.conditions, d.medications, d.immunization,
+        d.findings, d.treatment, d.healthStatus, rDate(d.followUp), rExtra(d.extra, rKindFields(cx, 'guidanceSettings', d.schoolId, 'health')), d.createdByName, rTs(d.createdAt)];
+    } },
+  guiCases: { src: 'guidanceRecords', tab: 'Guidance - Counseling', wide: [8, 9, 14],
+    head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Kind of record', 'Concern / reason', 'Action taken', 'Referred to', 'Status', 'Parent / guardian informed', 'Follow-up date', 'Remarks', 'Additional information', 'Recorded by', 'Recorded on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.category, d.concern, d.action, d.referredTo, d.status, rYN(d.parentNotified), rDate(d.followUp), d.remarks, rExtra(d.extra, rKindFields(cx, 'guidanceSettings', d.schoolId, 'guidance')), d.createdByName, rTs(d.createdAt)];
+    } }
+};
+
+function recBook() {
+  var id = prop('RECORDS_ID'); if (!id) return null;
+  return SpreadsheetApp.openById(id);
+}
+function recSheet(book, key) {
+  var def = REC[key], sh = book.getSheetByName(def.tab), n = def.head.length + 1;
+  if (!sh) {
+    try {
+      sh = book.insertSheet(def.tab);
+      sh.getRange(1, 1, 1, n).setValues([def.head.concat([REC_ID_HEAD])]).setFontWeight('bold').setBackground('#b3121f').setFontColor('#ffffff').setWrap(true).setVerticalAlignment('middle');
+      sh.setFrozenRows(1);
+      sh.getRange(1, 1, sh.getMaxRows(), n).setNumberFormat('@');
+      for (var c = 1; c <= n; c++) sh.setColumnWidth(c, def.wide.indexOf(c) >= 0 ? 300 : c === n ? 150 : Math.max(95, Math.min(190, def.head[c - 1].length * 9 + 24)));
+      def.wide.forEach(function (c) { sh.getRange(2, c, sh.getMaxRows() - 1, 1).setWrap(true); });
+      sh.getRange(2, n, sh.getMaxRows() - 1, 1).setFontColor('#9aa0a6').setFontSize(8);
+      sh.getRange(2, 1, sh.getMaxRows() - 1, n - 1).setVerticalAlignment('top');
+      try { sh.getRange(1, 1, sh.getMaxRows(), n).createFilter(); } catch (e) { }
+    } catch (e) { sh = book.getSheetByName(def.tab); if (!sh) throw e; }
+  }
+  return sh;
+}
+function recRows(sh, from, count) { var need = from + count - 1, max = sh.getMaxRows(); if (need > max) sh.insertRowsAfter(max, need - max + 200); }
+function recClean(row, id) { var r = row.map(function (v) { return v === undefined || v === null ? '' : String(v); }); r.push(id); return r; }
+
+/** Brings the readable sheet in step with a few changed records (called after every save). */
+function recSync(book, key, putIds, delIds, cx) {
+  var def = REC[key], sh = recSheet(book, key), n = def.head.length + 1, last = sh.getLastRow(), pos = {};
+  if (last > 1) sh.getRange(2, n, last - 1, 1).getValues().forEach(function (r, i) { pos[String(r[0])] = i + 2; });
+  if (putIds.length > 12) colOf(T(def.src), 4);
+  var add = [], upd = [];
+  putIds.forEach(function (id) {
+    var d = getDoc(def.src, id);
+    if (!d) { delIds.push(id); return; }
+    var row = recClean(def.row(d, id, cx), id);
+    if (pos[id]) upd.push({ at: pos[id], row: row }); else add.push(row);
+  });
+  if (upd.length > 8 && last > 1) {          // many changed rows: read the tab once, change them in memory, write it back once
+    var all = sh.getRange(2, 1, last - 1, n).getValues();
+    upd.forEach(function (u) { all[u.at - 2] = u.row; });
+    var big = sh.getRange(2, 1, last - 1, n); big.setNumberFormat('@'); big.setValues(all);
+  } else upd.forEach(function (u) { var rg = sh.getRange(u.at, 1, 1, n); rg.setNumberFormat('@'); rg.setValues([u.row]); });
+  if (add.length) { var start = Math.max(sh.getLastRow(), 1) + 1; recRows(sh, start, add.length); var r2 = sh.getRange(start, 1, add.length, n); r2.setNumberFormat('@'); r2.setValues(add); }
+  delIds.map(function (id) { return pos[id]; }).filter(Boolean).sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+}
+function mirrorOps(ops) {
+  try {
+    var work = {};
+    (ops || []).forEach(function (op) {
+      Object.keys(REC).forEach(function (k) {
+        if (REC[k].src !== op.coll) return;
+        var w = work[k] || (work[k] = { put: {}, del: {} });
+        if (op.op === 'delete') { w.del[op.id] = 1; delete w.put[op.id]; } else { w.put[op.id] = 1; delete w.del[op.id]; }
+      });
+    });
+    var keys = Object.keys(work); if (!keys.length || !prop('RECORDS_ID')) return;
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(20000)) { setProp('RECORDS_STALE', '1'); return; }
+    try {
+      var book = recBook(), cx = rcx();
+      keys.forEach(function (k) { recSync(book, k, Object.keys(work[k].put), Object.keys(work[k].del), cx); });
+    } catch (e) { setProp('RECORDS_STALE', '1'); console.error('Records sheet: ' + (e && e.stack || e)); } finally { lock.releaseLock(); }
+  } catch (e2) { console.error('Records sheet: ' + (e2 && e2.stack || e2)); }
+}
+/** Rewrites every tab of the readable sheet from the portal's data (first fill, or to repair it). */
+function recRebuild(book) {
+  var cx = rcx(), report = [];
+  Object.keys(REC).forEach(function (k) {
+    var def = REC[k], sh = recSheet(book, k), n = def.head.length + 1, t = T(def.src), ids = colOf(t, 0), rows = [];
+    colOf(t, 4);
+    for (var i = 0; i < ids.length; i++) {
+      if (t.deleted[i]) continue;
+      var d; try { d = unpack(cellJson(t, i)); } catch (e) { continue; }
+      rows.push(recClean(def.row(d, ids[i], cx), ids[i]));
+    }
+    var last = sh.getLastRow(); if (last > 1) sh.getRange(2, 1, last - 1, n).clearContent();
+    if (rows.length) { recRows(sh, 2, rows.length); var rg = sh.getRange(2, 1, rows.length, n); rg.setNumberFormat('@'); rg.setValues(rows); }
+    report.push(def.tab + ': ' + rows.length);
+  });
+  _tabs = {}; setProp('RECORDS_STALE', '');
+  return report;
+}
+function recReadMe(book) {
+  var sh = book.getSheets()[0];
+  if (sh.getName() !== 'Read me') { try { sh.setName('Read me'); } catch (e) { } }
+  var lines = ['ARK Exam Portal - Records (readable copy)', '',
+    'This sheet is written for people to read. Every row is one record in plain words.',
+    'It is filled in AUTOMATICALLY by the portal each time the Registrar, Finance, Custodian or Guidance saves, edits or deletes a record.',
+    '', 'Tabs:', '  Registrar - Students, Registrar - Requirements, Registrar - Enrollment', '  Finance - Payments, Finance - Balances', '  Custodian - Items', '  Guidance - Health, Guidance - Counseling',
+    '', 'Please do NOT type in these tabs: the next save would overwrite your change. To correct a record, edit it in the portal.',
+    'The last column of every tab (Record ID) is how the portal finds the row. Do not change or delete it.',
+    'Use the filter buttons in the first row to search, sort or filter. Use File > Download to get Excel or PDF copies.',
+    '', 'PRIVACY: Guidance tabs hold health and counseling information. Share this Google Sheet only with people allowed to see it',
+    '(Share > Viewer). Each school appears in the School column.'];
+  sh.clear(); sh.getRange(1, 1, lines.length, 1).setValues(lines.map(function (l) { return [l]; }));
+  sh.getRange(1, 1).setFontWeight('bold').setFontSize(14); sh.setColumnWidth(1, 760);
+}
+
 /* ============================== web app entry ============================== */
 function runCall(actor, c) {
   switch (c.k) {
@@ -820,8 +1048,10 @@ function runCall(actor, c) {
     case 'count': return opCount(makeS(actor), c);
     case 'batch': {
       if (!Array.isArray(c.ops) || c.ops.length > 500) fail('invalid-argument', 'Too many changes at once.');
-      var lock = LockService.getScriptLock(); lock.waitLock(25000);
-      try { return commit(actor, c.ops); } finally { lock.releaseLock(); }
+      var lock = LockService.getScriptLock(), res; lock.waitLock(25000);
+      try { res = commit(actor, c.ops); } finally { lock.releaseLock(); }
+      mirrorOps(c.ops);          // copy the change into the readable Records sheet (never blocks or fails the save)
+      return res;
     }
     case 'fn':
       switch (c.name) {
@@ -869,6 +1099,10 @@ function onOpen() {
     .addItem('1. First-time setup', 'menuSetup')
     .addItem('2. Create / reset the Super Admin', 'menuSuper')
     .addItem('3. Set the website address (for password-reset emails)', 'menuSite')
+    .addSeparator()
+    .addItem('4. Create the readable Records sheet', 'menuRecordsCreate')
+    .addItem('5. Refresh the readable Records sheet (rewrite everything)', 'menuRecordsRefresh')
+    .addItem('6. Use an existing Google Sheet as the Records sheet', 'menuRecordsLink')
     .addToUi();
 }
 function menuSetup() {
@@ -905,3 +1139,33 @@ function menuSite() {
   if (!/^https:\/\/[^\s]+$/.test(u)) { ui.alert('Enter a full address starting with https://'); return; }
   setProp('SITE_URL', u); ui.alert('Saved', u, ui.ButtonSet.OK);
 }
+
+/* ---------- readable Records sheet: menu actions ---------- */
+function menuRecordsCreate() {
+  var ui = SpreadsheetApp.getUi();
+  if (!prop('SECRET')) { ui.alert('Run "1. First-time setup" first.'); return; }
+  if (prop('RECORDS_ID')) { ui.alert('The Records sheet already exists', 'Open it here:\n' + SpreadsheetApp.openById(prop('RECORDS_ID')).getUrl() + '\n\nUse "5. Refresh" to rewrite it from the portal data.', ui.ButtonSet.OK); return; }
+  var book = SpreadsheetApp.create('ARK Exam Portal - Records (readable copy)');
+  setProp('RECORDS_ID', book.getId());
+  var rep = finishRecords(book);
+  ui.alert('Records sheet created', 'Open it here:\n' + book.getUrl() + '\n\n' + rep.join('\n') + '\n\nFrom now on every save in the Registrar, Finance, Custodian and Guidance pages is copied into it automatically. Share it (Viewer) only with people allowed to see it.', ui.ButtonSet.OK);
+}
+function menuRecordsRefresh() {
+  var ui = SpreadsheetApp.getUi();
+  if (!prop('RECORDS_ID')) { ui.alert('Create the Records sheet first (menu item 4).'); return; }
+  var book = SpreadsheetApp.openById(prop('RECORDS_ID')), rep = finishRecords(book);
+  ui.alert('Records sheet refreshed', book.getUrl() + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
+}
+function menuRecordsLink() {
+  var ui = SpreadsheetApp.getUi();
+  if (!prop('SECRET')) { ui.alert('Run "1. First-time setup" first.'); return; }
+  var r = ui.prompt('Existing Google Sheet', 'Paste the address (URL) of an EMPTY Google Sheet you own. The portal will add its tabs to it.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var m = /\/d\/([A-Za-z0-9_-]+)/.exec(r.getResponseText()) || /^([A-Za-z0-9_-]{20,})$/.exec(r.getResponseText().trim());
+  if (!m) { ui.alert('That does not look like a Google Sheet address.'); return; }
+  var book; try { book = SpreadsheetApp.openById(m[1]); } catch (e) { ui.alert('That sheet could not be opened. Make sure you own it or can edit it.'); return; }
+  setProp('RECORDS_ID', book.getId());
+  var rep = finishRecords(book);
+  ui.alert('Records sheet linked', book.getUrl() + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
+}
+function finishRecords(book) { recReadMe(book); var rep = recRebuild(book); try { book.setActiveSheet(book.getSheets()[0]); } catch (e) { } return rep; }

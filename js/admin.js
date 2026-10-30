@@ -31,7 +31,8 @@ $("dlgCopy").onclick = () => navigator.clipboard?.writeText($("dlgPw").textConte
 const ask = (text) => confirm(text);
 const lastOf = (t) => t.lastName || String(t.displayName || "").split(",")[0];
 const pwOf = (t) => defaultStudentPassword({ birthday: t.birthday, lastName: lastOf(t) });
-const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance" };
+const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance" };
+const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", teacher: "faculty / teacher" };
 const userOf = (t) => (t.role === "student" ? t.studentId : t.employeeId);
 
 /* ---------- connection indicator ---------- */
@@ -58,7 +59,7 @@ const logAudit = (action, targetUid, details = {}) =>
 /* ---------- accounts of this school ---------- */
 let users = [], teachers = [];
 async function loadTeachers() {
-  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "student"])));
+  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "student"])));
   users = snap.docs.map((d) => d.data()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
   teachers = users.filter((u) => u.role === "teacher");
   renderTeachers();
@@ -71,14 +72,14 @@ function renderTeachers() {
   const rows = users.filter((t) => (!rf || t.role === rf) && (!q || [t.displayName, t.employeeId, t.studentId].join(" ").toLowerCase().includes(q)));
   $("teachers").innerHTML = `<tr><th>Name</th><th>Role</th><th>Username</th><th>Status</th><th>Created</th><th></th></tr>` +
     (rows.length ? rows.map((t) => { const stu = t.role === "student"; return `<tr>
-      <td>${esc(t.displayName)}</td><td>${stu ? "student" : t.role === "registrar" ? "registrar" : t.role === "finance" ? "finance" : "faculty / teacher"}</td>
+      <td>${esc(t.displayName)}</td><td>${ROLE_LABEL[t.role] || esc(t.role)}</td>
       <td>${stu ? "Exam ID No. " + esc(t.studentId) : esc(school.code) + " / " + esc(t.employeeId)}${t.hasRealEmail ? `<small>${esc(t.email)}</small>` : ""}</td>
       <td><span class="badge ${esc(t.status)}">${esc(t.status)}</span></td><td>${fmt(t.createdAt)}</td>
       <td class="actions">
         <button class="btn small" data-act="toggle" data-uid="${esc(t.uid)}">${t.status === "active" ? "Suspend" : "Reactivate"}</button>
         ${t.hasRealEmail ? `<button class="btn small" data-act="mail" data-uid="${esc(t.uid)}">Email reset link</button>` : ""}
-        <button class="btn small" data-act="reset" data-uid="${esc(t.uid)}">Reset password</button>
-        <button class="btn small" data-act="setpw" data-uid="${esc(t.uid)}">Set password</button>
+        ${t.role === "teacher" ? "" : `<button class="btn small" data-act="reset" data-uid="${esc(t.uid)}">Reset password</button>
+        <button class="btn small" data-act="setpw" data-uid="${esc(t.uid)}">Set password</button>`}
         <button class="btn small danger" data-act="remove" data-uid="${esc(t.uid)}">Remove account</button>
       </td></tr>`; }).join("") : `<tr><td colspan="6">No accounts found.</td></tr>`);
 }
@@ -88,7 +89,7 @@ $("q").addEventListener("input", renderTeachers); $("roleF").addEventListener("c
 $("newT").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
-  const role = ["registrar", "finance"].includes(f.role) ? f.role : "teacher", lastName = f.lastName.trim(), firstName = f.firstName.trim(), mi = (f.mi || "").trim().slice(0, 1).toUpperCase(), employeeId = f.employeeId.trim(), birthday = f.birthday;
+  const role = ["registrar", "finance", "custodian", "guidance"].includes(f.role) ? f.role : "teacher", lastName = f.lastName.trim(), firstName = f.firstName.trim(), mi = (f.mi || "").trim().slice(0, 1).toUpperCase(), employeeId = f.employeeId.trim(), birthday = f.birthday;
   if (!lastName || !firstName || !employeeId || !birthday) return flash("Enter the last name, first name, Employee No. and birthday.");
   // Typed email wins; otherwise ONE shared inbox: IT Admin email + Employee No. (adminemail+1001@gmail.com)
   const realEmail = cleanEmail(f.email) || sharedEmail(profile.email, employeeId);
@@ -130,8 +131,8 @@ async function setCustomPassword(t) {
 
 /* ---------- remove an account ---------- */
 async function removeAccount(u) {
-  const stu = u.role === "student", label = stu ? `student ${u.displayName} (Exam ID No. ${u.studentId})` : `${u.role === "registrar" ? "registrar" : u.role === "finance" ? "finance" : "teacher"} ${u.displayName} (Employee No. ${u.employeeId})`;
-  const extra = stu || u.role === "registrar" || u.role === "finance" ? "" : "\n\nEverything this teacher owns is deleted too: sections, classroom codes, students (and their logins), examinations, results and modules.";
+  const stu = u.role === "student", label = stu ? `student ${u.displayName} (Exam ID No. ${u.studentId})` : `${ROLE_LABEL[u.role] === "faculty / teacher" ? "teacher" : ROLE_LABEL[u.role] || u.role} ${u.displayName} (Employee No. ${u.employeeId})`;
+  const extra = u.role !== "teacher" ? "" : "\n\nEverything this teacher owns is deleted too: sections, classroom codes, students (and their logins), examinations, results and modules.";
   if (!ask(`Permanently remove ${label}? Their login is deleted and this cannot be undone.${extra}`)) return;
   await callFn("adminDeleteUser", { uid: u.uid });
   flash(`${u.displayName} was removed.`, true);
@@ -142,6 +143,7 @@ $("teachers").addEventListener("click", async (e) => {
   const t = users.find((x) => x.uid === b.dataset.uid); if (!t) return;
   try {
     if (b.dataset.act === "remove") { await removeAccount(t); await refresh(); return; }
+    if ((b.dataset.act === "setpw" || b.dataset.act === "reset") && t.role === "teacher") return;
     if (b.dataset.act === "setpw") { await setCustomPassword(t); return; }
     if (b.dataset.act === "mail") {
       if (!ask(`Send a password-reset link to ${t.email}? ${t.displayName} can then choose a new password from their own inbox.`)) return;

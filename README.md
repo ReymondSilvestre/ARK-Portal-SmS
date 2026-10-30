@@ -7,7 +7,7 @@ reached only through a small **Google Apps Script** web app that checks who is a
 GitHub Pages (this repo)  ->  Apps Script web app (apps-script/Code.gs)  ->  Google Sheet (database) + Google Drive (module files)
 ```
 
-Accounts are created only by the **Super Admin** (schools + IT Admins) and the **IT Admin** (teachers, registrar, finance);
+Accounts are created only by the **Super Admin** (schools + IT Admins) and the **IT Admin** (teachers, registrar, finance, custodian, guidance);
 teachers activate their own students. They are stored in the `users` tab; password hashes are in `_auth`.
 
 ## Setup (about 15 minutes, once)
@@ -31,6 +31,10 @@ teachers activate their own students. They are stored in the `users` tab; passwo
 Open the site > **Teacher / Registrar / Finance / IT Admin** tab > sign in with the Super Admin email (school code blank).
 Register a school and its IT Admin; the temporary password is shown once. The IT Admin then creates the teacher,
 registrar and finance accounts, and teachers add and activate students, exactly as before.
+
+### 4. The readable Records sheet (second Google Sheet)
+In the spreadsheet menu choose **ARK Portal > 4. Create the readable Records sheet**. Registrar, Finance, Custodian and Guidance records are then copied into it automatically as plain, readable rows
+(see `CHANGES.md`). Share it as Viewer only with people allowed to read it.
 
 ## When you change `Code.gs` later
 Apps Script > **Deploy > Manage deployments > pencil > Version: New version > Deploy**. (The URL stays the same.)
