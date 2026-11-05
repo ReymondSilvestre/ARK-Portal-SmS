@@ -664,3 +664,5 @@ body.has-side .top .brand-school{font-size:1.3rem}
   body.has-side .top .brand-school{font-size:1rem}
   body.has-side .top .school-logo,body.has-side .top .school-id .mark.logo img{height:var(--logo);width:var(--logo)}
 }
+
+.photo-actions{display:flex;gap:.4rem;justify-content:center;margin:-.2rem 0 .6rem}.photo-actions label.btn{cursor:pointer}

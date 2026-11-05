@@ -83,3 +83,10 @@ The sign-in page has two tabs: **Student** (Exam ID No.) and **Employee** (schoo
 | Cloud Functions | Apps Script actions (`createAccount`, `adminSetTempPassword`, `adminDeleteUser`, `superClearSchoolData`, `superDeleteSchool`, `allocIds`, ...) |
 | Password reset email by Firebase | reset link e-mailed by Apps Script (valid 1 hour, one use) |
 | Vercel | GitHub Pages |
+
+## Clean URLs (no `.html`)
+Pages open at `/login`, `/admin`, `/teacher` ... GitHub Pages serves `page.html` at `/page` automatically. Old `.html` links still work and are tidied in the address bar. Re-deploy `Code.gs` (new version) so password-reset emails use the clean link.
+Local testing: use a server that supports clean URLs (e.g. `npx serve`), not `python -m http.server`.
+
+## IT Admin photo
+The IT Admin can change or remove their own photo (**Change photo** in the side panel) and replace or remove the photo of any employee account under **Accounts > Change photo / Remove photo** (needs the updated `Code.gs`). The picture is also saved to the employee's HR record. HR can still edit it under HR > IT Admin.

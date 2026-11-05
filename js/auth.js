@@ -11,7 +11,7 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const homeFor = (role) =>
-  role === "superadmin" ? "superadmin.html" : role === "admin" ? "admin.html" : role === "registrar" ? "registrar.html" : role === "finance" ? "finance.html" : role === "custodian" ? "custodian.html" : role === "guidance" ? "guidance.html" : role === "hr" ? "hr.html" : role === "staff" ? "staff.html" : role === "student" ? "student.html" : "teacher.html";
+  role === "superadmin" ? "superadmin" : role === "admin" ? "admin" : role === "registrar" ? "registrar" : role === "finance" ? "finance" : role === "custodian" ? "custodian" : role === "guidance" ? "guidance" : role === "hr" ? "hr" : role === "staff" ? "staff" : role === "student" ? "student" : "teacher";
 
 /* ---------- logins ----------
    Students: Exam ID No.                      (no school code)
@@ -81,7 +81,7 @@ function revalidateMe() {
   call({ k: "me" }).then((r) => {
     saveMe(r); const fresh = decode(r), p = fresh.profile, old = meCache && meCache.profile;
     const bad = !p || p.status !== "active" || (old && p.role !== old.role) || (p.role !== "superadmin" && (!fresh.school || fresh.school.status !== "active"));
-    if (bad) { clearSession(); if (!/login\.html/.test(location.pathname)) location.href = "login.html?denied=1"; } else meCache = fresh;
+    if (bad) { clearSession(); if (!/\/login(\.html)?\/?$/.test(location.pathname)) location.href = "login?denied=1"; } else meCache = fresh;
   }).catch((e) => { if (e && e.code === "unauthenticated") forgetMe(); });
 }
 const fetchMe = async () => {
@@ -106,8 +106,9 @@ export async function sendReset(who, school) {
   return r.result;
 }
 export const resetWithToken = (uid, token, password) => rpc("resetConfirm", { uid, token, password });
-export const logout = async () => { clearSession(); meCache = null; location.href = "login.html"; };
+export const logout = async () => { clearSession(); meCache = null; location.href = "login"; };
 export { warmUp } from "./db.js";
+export { forgetMe };
 
 export async function getProfile() { try { return (await fetchMe()).profile; } catch { return null; } }
 export async function getSchool(profile) {
@@ -120,7 +121,7 @@ export async function destinationFor() {
   if (!p) throw new Error("This account is not registered. Contact your IT administrator.");
   if (p.status !== "active") throw new Error("This account is suspended. Contact your IT administrator.");
   if (p.role !== "superadmin" && (!m.school || m.school.status !== "active")) throw new Error("This school is not active. Contact the system administrator.");
-  return p.mustChangePassword ? "change-password.html" : homeFor(p.role);
+  return p.mustChangePassword ? "change-password" : homeFor(p.role);
 }
 
 export async function changeOwnPassword(newPassword) {
@@ -131,15 +132,15 @@ export async function changeOwnPassword(newPassword) {
 
 export async function requireRole(roles, { allowMustChange = false } = {}) {
   const s = getSession();
-  if (!s) { location.href = "login.html"; return new Promise(() => {}); }
+  if (!s) { location.href = "login"; return new Promise(() => {}); }
   let m = null;
   try { m = await fetchMe(); } catch (e) { if (e.code === "unauthenticated") return new Promise(() => {}); }
   const profile = m && m.profile, school = m && m.school;
   const schoolOk = profile && (profile.role === "superadmin" || (school && school.status === "active"));
   if (!profile || profile.status !== "active" || !schoolOk || !roles.includes(profile.role)) {
-    clearSession(); location.href = "login.html?denied=1"; return new Promise(() => {});
+    clearSession(); location.href = "login?denied=1"; return new Promise(() => {});
   }
-  if (profile.mustChangePassword && !allowMustChange) { location.href = "change-password.html"; return new Promise(() => {}); }
+  if (profile.mustChangePassword && !allowMustChange) { location.href = "change-password"; return new Promise(() => {}); }
   return { user: { uid: s.uid, email: profile.email }, profile, school };
 }
 

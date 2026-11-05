@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><script>if(/\.html$/.test(location.pathname))history.replaceState(null,"",location.pathname.replace(/(\/index)?\.html$/,"")+location.search+location.hash)</script>
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign in - ARK-Portal Sms</title><link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><link rel="modulepreload" href="js/auth.js"><link rel="modulepreload" href="js/db.js"><link rel="stylesheet" href="css/style.css"></head>
@@ -118,7 +118,7 @@ for (const t of [$("tabStudent"), $("tabStaff")]) t.addEventListener("keydown", 
       if (a.length < 8 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) return show("Use at least 8 characters (10 for staff) with a letter and a number.");
       if (a !== $("rp2").value) return show("The two passwords do not match.");
       $("rgo").disabled = true;
-      try { await resetWithToken(uid, tok, a); history.replaceState(null, "", "login.html"); $("resetPw").hidden = true; $("signin").hidden = false; show("Password changed. Sign in with your new password.", true); }
+      try { await resetWithToken(uid, tok, a); history.replaceState(null, "", "login"); $("resetPw").hidden = true; $("signin").hidden = false; show("Password changed. Sign in with your new password.", true); }
       catch (err) { show(friendlyError(err)); $("rgo").disabled = false; }
     });
   }

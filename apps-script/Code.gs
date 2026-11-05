@@ -709,7 +709,7 @@ function sendResetMail(uid, email, name) {
   var a = authRow(uid); if (!a) return;
   var raw = newId() + newId(); a.resetHash = sha(raw); a.resetExp = String(nowMs() + RESET_MS); authPut(a); flushAll();
   var base = siteUrl(); if (!base) fail('failed-precondition', 'The website address is not set (menu ARK Portal > Set website address).');
-  var link = base + '/login.html?reset=' + raw + '&u=' + uid;
+  var link = base + '/login?reset=' + raw + '&u=' + uid;
   MailApp.sendEmail({ to: email, subject: 'Reset your Exam Portal password', name: 'Exam Portal',
     body: 'Hello ' + (name || '') + ',\n\nOpen this link to choose a new password (valid for 1 hour):\n' + link + '\n\nIf you did not ask for this, ignore this email.' });
 }
@@ -960,6 +960,28 @@ function actHrAdminSave(actor, p) {
     flushAll();
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
   dropActor(uid);   // the IT Admin's next page load shows the new photo / name
+  return { ok: true };
+}
+/** IT Admin: replace or remove the 2x2 photo of ANY employee account of the school (and their own). p.uid empty = the IT Admin's own photo.
+ *  The photo is also written to the person's HR record, so HR and the person's own page show the same picture. */
+function actAdminSetPhoto(actor, p) {
+  var S = makeS(actor); if (!S.isAdmin) fail('permission-denied', 'Only the IT Admin can change photos.');
+  var photo = String(p.photo || '');
+  if (!photoOk({ photo: photo })) fail('invalid-argument', 'The photo is not valid. Choose a JPG or PNG picture again.');
+  var uid = String(p.uid || actor.uid), u = getDoc('users', uid);
+  if (!u || u.schoolId !== S.sid || (u.role !== 'admin' && EMP_ROLES.indexOf(u.role) < 0)) fail('not-found', 'That account was not found in your school.');
+  var lock = LockService.getScriptLock(); lock.waitLock(25000);
+  try {
+    if (photo) u.photo = photo; else delete u.photo;
+    putDoc('users', uid, u);
+    if (u.role !== 'admin' && u.employeeId) {
+      var key = staffKey(S.sid, u.employeeId), e = getDoc('employees', key);
+      if (e && e.accountUid === uid) { if (photo) e.photo = photo; else delete e.photo; putDoc('employees', key, e); }
+    }
+    putDoc('auditLogs', newId(), { actorUid: actor.uid, schoolId: S.sid, action: u.role + (photo ? '.photo_changed' : '.photo_removed'), targetUid: uid, details: { username: u.employeeId || u.email || '' }, createdAt: { __ts: nowMs() } });
+    flushAll();
+  } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  dropActor(uid);
   return { ok: true };
 }
 /* Registrar: delete the login account of one student of the registrar's own school (even if it is already created).
@@ -1304,6 +1326,7 @@ function runCall(actor, c) {
         case 'hrDeleteEmployee': return actHrDeleteEmployee(actor, c.data || {});
         case 'hrAdminGet': return actHrAdminGet(actor);
         case 'hrAdminSave': return actHrAdminSave(actor, c.data || {});
+        case 'adminSetPhoto': return actAdminSetPhoto(actor, c.data || {});
       }
   }
   fail('invalid-argument', 'Unknown request.');

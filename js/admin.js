@@ -1,4 +1,5 @@
-import { requireRole, logout, db, esc, friendlyError, staffEmail, sharedEmail, defaultStudentPassword, fullName, applyBranding, cleanEmail } from "./auth.js";
+import { requireRole, logout, db, esc, friendlyError, staffEmail, sharedEmail, defaultStudentPassword, fullName, applyBranding, cleanEmail, forgetMe } from "./auth.js";
+import { squarePhoto } from "./photo.js";
 import {
   collection, query, where, orderBy, limit, getDocs, getCountFromServer,
   doc, setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp, callFn
@@ -80,6 +81,7 @@ function renderTeachers() {
         ${t.hasRealEmail ? `<button class="btn small" data-act="mail" data-uid="${esc(t.uid)}">Email reset link</button>` : ""}
         ${t.role === "teacher" ? "" : `<button class="btn small" data-act="reset" data-uid="${esc(t.uid)}">Reset password</button>
         <button class="btn small" data-act="setpw" data-uid="${esc(t.uid)}">Set password</button>`}
+        ${stu ? "" : `<button class="btn small" data-act="photo" data-uid="${esc(t.uid)}">Change photo</button><button class="btn small" data-act="photodel" data-uid="${esc(t.uid)}">Remove photo</button>`}
         <button class="btn small danger" data-act="remove" data-uid="${esc(t.uid)}">Remove account</button>
       </td></tr>`; }).join("") : `<tr><td colspan="6">No accounts found.</td></tr>`);
 }
@@ -183,6 +185,11 @@ $("teachers").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const t = users.find((x) => x.uid === b.dataset.uid); if (!t) return;
   try {
+    if (b.dataset.act === "photo") { pickPhotoFor(t); return; }
+    if (b.dataset.act === "photodel") {
+      if (!ask(`Remove the photo of ${t.displayName}?`)) return;
+      await callFn("adminSetPhoto", { uid: t.uid, photo: "" }); flash(`The photo of ${t.displayName} was removed.`, true); return;
+    }
     if (b.dataset.act === "remove") { await removeAccount(t); await refresh(); return; }
     if ((b.dataset.act === "setpw" || b.dataset.act === "reset") && t.role === "teacher") return;
     if (b.dataset.act === "setpw") { await setCustomPassword(t); return; }
@@ -277,3 +284,36 @@ $("brandClear").addEventListener("click", async () => {
     location.reload();
   } catch (err) { flash(friendlyError(err)); }
 });
+
+/* ---------- my own photo: the IT Admin can change or remove it (HR can still edit it too) ---------- */
+function showMyPhoto(url) {
+  const im = $("sidePhoto"), av = $("sideAvatar");
+  if (url) { im.src = url; im.alt = profile.displayName || ""; im.hidden = false; av.hidden = true; } else { im.removeAttribute("src"); im.hidden = true; av.hidden = false; }
+  $("myPhotoDel").hidden = !url; profile.photo = url || "";
+}
+showMyPhoto(profile.photo || "");
+async function saveMyPhoto(url) {
+  await callFn("adminSetPhoto", { photo: url });
+  forgetMe();                       // the cached profile is refreshed at the next page load
+  showMyPhoto(url);
+  flash(url ? "Your photo was updated." : "Your photo was removed.", true);
+}
+$("myPhotoFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { const d = await squarePhoto(f); if (d) await saveMyPhoto(d); } catch (err) { flash(friendlyError(err)); }
+});
+$("myPhotoDel").addEventListener("click", async () => {
+  if (!ask("Remove your photo?")) return;
+  try { await saveMyPhoto(""); } catch (err) { flash(friendlyError(err)); }
+});
+
+/* ---------- replace the photo of any employee account (the person sees it at their next page load; HR sees it too) ---------- */
+function pickPhotoFor(t) {
+  const inp = Object.assign(document.createElement("input"), { type: "file", accept: "image/*" });
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try { const d = await squarePhoto(f); if (!d) return; await callFn("adminSetPhoto", { uid: t.uid, photo: d }); flash(`The photo of ${t.displayName} was replaced.`, true); }
+    catch (err) { flash(friendlyError(err)); }
+  };
+  inp.click();
+}

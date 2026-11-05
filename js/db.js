@@ -101,7 +101,7 @@ async function flush() {
     catch (e) { if (!readOnly || e.code === "config") throw e; res = await post({ action: "multi", token: s && s.token, calls: batch.map((b) => b.call) }); }
   } catch (e) { batch.forEach((b) => b.reject(e)); return; }
   if (!res.ok) {
-    if (res.error && res.error.code === "unauthenticated") { clearSession(); if (!/login\.html/.test(location.pathname)) location.href = "login.html"; }
+    if (res.error && res.error.code === "unauthenticated") { clearSession(); if (!/\/login(\.html)?\/?$/.test(location.pathname)) location.href = "login"; }
     batch.forEach((b) => b.reject(err(res.error))); return;
   }
   res.results.forEach((r, i) => (r.ok ? batch[i].resolve(r.data) : batch[i].reject(err(r.error))));
