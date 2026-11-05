@@ -666,3 +666,4 @@ body.has-side .top .brand-school{font-size:1.3rem}
 }
 
 .photo-actions{display:flex;gap:.4rem;justify-content:center;margin:-.2rem 0 .6rem}.photo-actions label.btn{cursor:pointer}
+.side-sync{display:flex;align-items:center;justify-content:center;gap:.4rem;font-size:.85rem;margin:-.2rem 0 .6rem}.side-sync.off .dot{background:var(--warn)}
