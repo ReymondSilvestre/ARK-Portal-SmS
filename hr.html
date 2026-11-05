@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<title>HR - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css">
+<!-- SheetJS: used only to download lists as Excel files -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+</head><body><div class="wrap wide">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="SylverVibe Code"></span><span id="who">HR</span></div>
+<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+<div id="msg" class="notice noprint" hidden role="alert"></div>
+<div class="tabs noprint" id="tabs">
+<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="add">Add employee</button><button class="btn" data-t="list">Employees</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button>
+</div>
+<section data-s="dash"></section>
+<section data-s="add" hidden></section>
+<section data-s="list" hidden></section>
+<section data-s="history" hidden></section>
+<section data-s="settings" hidden></section>
+</div>
+<script type="module" src="js/hr.js"></script>
+<script src="js/mobile.js" defer></script>
+</body></html>

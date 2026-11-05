@@ -9,7 +9,7 @@ import { API_URL } from "./config.js";
 const SKEY = "ark.session";
 export const getSession = () => { try { const s = JSON.parse(localStorage.getItem(SKEY) || "null"); if (s && s.token && s.exp > Date.now()) return s; } catch { } return null; };
 export const setSession = (s) => { try { localStorage.setItem(SKEY, JSON.stringify(s)); } catch { } };
-export const clearSession = () => { try { localStorage.removeItem(SKEY); } catch { } };
+export const clearSession = () => { try { localStorage.removeItem(SKEY); sessionStorage.removeItem("ark.me"); } catch { } try { memo.clear(); } catch { } };
 
 /* ---------- values ---------- */
 export class Timestamp {
@@ -75,7 +75,25 @@ async function flush() {
   }
   res.results.forEach((r, i) => (r.ok ? batch[i].resolve(r.data) : batch[i].reject(err(r.error))));
 }
-export const call = (c) => enqueue(c);
+/* ---------- faster pages: remember reads for a few seconds ----------
+   The same list asked twice within READ_TTL (switching tabs, re-opening a screen) is answered from memory instead of a new 1-3 second trip to Google.
+   Any save made from THIS browser forgets the remembered lists of the collections it touched (everything, for account actions), so what you just saved is always shown.
+   Answers are kept as plain data and decoded for every caller, so a page can change what it receives without affecting anyone else. */
+const READ_TTL = 15000, READS = { get: 1, list: 1, count: 1 };
+const memo = new Map();                       // key -> { exp, coll, p }
+export const forgetReads = (coll) => { if (!coll) memo.clear(); else for (const [k, v] of memo) if (v.coll === coll) memo.delete(k); };
+export const call = (c) => {
+  if (c.k === "batch") { const colls = new Set((c.ops || []).map((o) => o.coll)); colls.forEach(forgetReads); return enqueue(c).finally(() => colls.forEach(forgetReads)); }
+  if (c.k === "fn") return enqueue(c).finally(() => forgetReads());
+  if (!READS[c.k]) return enqueue(c);
+  const key = JSON.stringify(c), hit = memo.get(key);
+  if (hit && hit.exp > Date.now()) return hit.p;
+  const p = enqueue(c); memo.set(key, { exp: Date.now() + READ_TTL, coll: c.coll, p });
+  p.catch(() => memo.delete(key));
+  return p;
+};
+/** Wakes the server up (Google puts an idle script to sleep; the first request after a pause is the slow one). Called while the sign-in form is still being filled in. */
+export const warmUp = () => { try { post({ action: "ping" }).catch(() => {}); } catch { } };
 /** Server-side actions (create an account, set a password, delete a school ...). */
 export const callFn = (name, data) => enqueue({ k: "fn", name, data: data || {} });
 // Same shape as the Cloud Functions the pages used before.

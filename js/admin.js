@@ -31,8 +31,8 @@ $("dlgCopy").onclick = () => navigator.clipboard?.writeText($("dlgPw").textConte
 const ask = (text) => confirm(text);
 const lastOf = (t) => t.lastName || String(t.displayName || "").split(",")[0];
 const pwOf = (t) => defaultStudentPassword({ birthday: t.birthday, lastName: lastOf(t) });
-const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance" };
-const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", teacher: "faculty / teacher" };
+const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR" };
+const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", hr: "HR", teacher: "faculty / teacher" };
 const userOf = (t) => (t.role === "student" ? t.studentId : t.employeeId);
 
 /* ---------- connection indicator ---------- */
@@ -59,7 +59,7 @@ const logAudit = (action, targetUid, details = {}) =>
 /* ---------- accounts of this school ---------- */
 let users = [], teachers = [];
 async function loadTeachers() {
-  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "student"])));
+  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "student"])));
   users = snap.docs.map((d) => d.data()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
   teachers = users.filter((u) => u.role === "teacher");
   renderTeachers();
@@ -85,24 +85,58 @@ function renderTeachers() {
 }
 $("q").addEventListener("input", renderTeachers); $("roleF").addEventListener("change", renderTeachers);
 
-/* ---------- add a teacher: username = Employee No., password = birth year + first letter of last name ---------- */
+/* ---------- employees added by HR who do not have a login yet ---------- */
+let cands = [];
+async function loadCandidates() {
+  cands = (await callFn("hrCandidates")).employees || [];
+  renderCandidates();
+}
+const candName = (c) => `${c.lastName}, ${c.firstName}${c.middleInitial ? " " + c.middleInitial + "." : ""}`;
+function renderCandidates() {
+  const keepV = $("empSel").value, hrRole = $("roleSel").value === "hr";
+  $("empSel").innerHTML = (cands.length ? `<option value="">- Choose an employee -</option>` : `<option value="">${hrRole ? "" : "No employee is waiting. Ask HR to add them first."}</option>`) +
+    (hrRole ? `<option value="__new">New HR person (type the details below)</option>` : "") +
+    cands.map((c) => `<option value="${esc(c.key)}">${esc(c.employeeId)} - ${esc(candName(c))}${c.position ? " (" + esc(c.position) + ")" : ""}</option>`).join("");
+  if ([...$("empSel").options].some((o) => o.value === keepV)) $("empSel").value = keepV;
+  showEmpInfo();
+}
+function showEmpInfo() {
+  const v = $("empSel").value, c = cands.find((x) => x.key === v);
+  $("manualWrap").hidden = v !== "__new";
+  $("empInfo").hidden = !c;
+  if (c) {
+    $("empInfo").innerHTML = [["Employee No.", c.employeeId], ["Name", candName(c)], ["Birthday", c.birthday || "-"], ["Position", c.position || "-"], ["Department", c.department || "-"], ["HR says it needs", ROLE_NAME[c.accessType] || "-"]].map(([k, x]) => `<div><span>${k}</span><b>${esc(x)}</b></div>`).join("");
+  }
+}
+$("empSel").addEventListener("change", () => {
+  const c = cands.find((x) => x.key === $("empSel").value);
+  if (c && ROLE_NAME[c.accessType]) $("roleSel").value = c.accessType;   // HR already said which account this person needs
+  showEmpInfo();
+});
+$("roleSel").addEventListener("change", renderCandidates);
+
+/* ---------- create the login of an employee HR has added: username = Employee No., password = birth year + first letter of last name ---------- */
 $("newT").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
-  const role = ["registrar", "finance", "custodian", "guidance"].includes(f.role) ? f.role : "teacher", lastName = f.lastName.trim(), firstName = f.firstName.trim(), mi = (f.mi || "").trim().slice(0, 1).toUpperCase(), employeeId = f.employeeId.trim(), birthday = f.birthday;
-  if (!lastName || !firstName || !employeeId || !birthday) return flash("Enter the last name, first name, Employee No. and birthday.");
-  // Typed email wins; otherwise ONE shared inbox: IT Admin email + Employee No. (adminemail+1001@gmail.com)
-  const realEmail = cleanEmail(f.email) || sharedEmail(profile.email, employeeId);
-  if ((f.email || "").trim() && !realEmail) return flash("That email address is not valid. Fix it or leave it blank.");
-  const pw = defaultStudentPassword({ birthday, lastName });
-  if (!pw) return flash("The birthday is not valid.");
+  const role = ROLE_NAME[f.role] && f.role !== "student" ? f.role : "teacher", pick = $("empSel").value;
+  const manual = pick === "__new", c = cands.find((x) => x.key === pick);
+  if (!c && !manual) return flash("Choose an employee. If the person is not in the list, ask HR to add them first.");
+  const m = manual ? { lastName: $("mLast").value.trim(), firstName: $("mFirst").value.trim(), mi: $("mMi").value.trim().slice(0, 1).toUpperCase(), employeeId: $("mNo").value.trim(), birthday: $("mBirth").value } : null;
+  if (manual && (!m.lastName || !m.firstName || !m.employeeId || !m.birthday)) return flash("Enter the last name, first name, Employee No. and birthday of the HR person.");
+  const employeeId = manual ? m.employeeId : c.employeeId;
+  // Typed email wins, then the email HR has on file, otherwise ONE shared inbox: IT Admin email + Employee No. (adminemail+1001@gmail.com)
+  const realEmail = cleanEmail(f.email) || (c && cleanEmail(c.email)) || sharedEmail(profile.email, employeeId);
+  if ((f.email || "").trim() && !cleanEmail(f.email)) return flash("That email address is not valid. Fix it or leave it blank.");
+  const bday = manual ? m.birthday : c.birthday, last = manual ? m.lastName : c.lastName;
+  if (!defaultStudentPassword({ birthday: bday, lastName: last })) return flash("HR has not saved a valid birthday for this employee yet.");
   $("addBtn").disabled = true;
   try {
-    // The server checks the rules, makes the login (password = birth year + first letter of last name) and the profile.
-    const made = await callFn("createAccount", { role, displayName: fullName(lastName, firstName, mi), lastName, firstName, middleInitial: mi, employeeId, birthday,
-      realEmail, email: realEmail || staffEmail(school.code, employeeId) });
-    await logAudit(role + ".create", made.uid, { username: employeeId, ...(realEmail ? { email: realEmail } : {}) }).catch(() => {});
-    e.target.reset();
+    // The server checks the rules, makes the login and links it to the HR record. (It also writes the activity-log line, so nothing else is sent.)
+    const made = await callFn("createAccount", manual
+      ? { role: "hr", displayName: fullName(m.lastName, m.firstName, m.mi), lastName: m.lastName, firstName: m.firstName, middleInitial: m.mi, employeeId, birthday: bday, realEmail, email: realEmail || staffEmail(school.code, employeeId) }
+      : { role, employeeKey: c.key, realEmail, email: realEmail || staffEmail(school.code, employeeId) });
+    e.target.reset(); $("manualWrap").hidden = true;
     popup(ROLE_NAME[role] + " account created", `Sign-in: school code ${school.code}, Employee No. ${employeeId}${realEmail ? ` (or the email ${realEmail})` : ""}. Temporary password (birth year + first letter of last name). They must choose a new one at first sign-in.` + (realEmail ? ` Forgot-password links go to ${realEmail}.` : " No email was given, so password help goes through you."), made.password);
     await refresh();
   } catch (err) { flash(friendlyError(err)); }
@@ -181,7 +215,8 @@ async function loadCounts() {
   } catch (err) { flash("Could not load counts: " + friendlyError(err)); }
 }
 async function refresh() {
-  try { await loadTeachers(); await Promise.all([loadAudit(), loadCounts()]); }
+  // all four requests leave in the same moment, so they travel to the server as ONE trip (they used to wait for each other one by one)
+  try { await Promise.all([loadTeachers(), loadCandidates(), loadAudit(), loadCounts()]); }
   catch (err) { flash("Could not load data: " + friendlyError(err)); }
 }
 refresh();

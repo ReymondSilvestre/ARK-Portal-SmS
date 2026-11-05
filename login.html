@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign in - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<title>Sign in - SylverVibe Code - Exam Portal</title><link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><link rel="modulepreload" href="js/auth.js"><link rel="modulepreload" href="js/db.js"><link rel="stylesheet" href="css/style.css"></head>
 <body class="auth-page">
 <script>
 /* If the module below cannot start (a js file is missing or an old copy), say so instead of silently reloading. */
@@ -19,44 +19,39 @@ document.addEventListener("submit", function (e) {
 
   <section id="signin">
     <h1>Sign in</h1>
-    <div class="role-tabs" role="tablist" aria-label="Choose how you sign in">
+    <div class="role-tabs" role="tablist" aria-label="Sign in as">
       <button type="button" role="tab" id="tabStudent" aria-controls="panelStudent" aria-selected="true">Student</button>
-      <button type="button" role="tab" id="tabStaff" aria-controls="panelStaff" aria-selected="false">Teacher / Registrar / Finance / Custodian / Guidance / IT Admin</button>
+      <button type="button" role="tab" id="tabStaff" aria-controls="panelStaff" aria-selected="false">Employee</button>
     </div>
 
-    <!-- STUDENT LOGIN -->
+    <!-- STUDENT -->
     <div id="panelStudent" role="tabpanel" aria-labelledby="tabStudent">
-      <p class="muted role-note">Sign in with your <b>Exam ID No.</b> (for example 2026-0001). No school code needed.</p>
       <form id="fs" novalidate>
-        <label>Exam ID No.<input id="sid" autocomplete="username" autocapitalize="none" required></label>
-        <label>Password<input id="spw" type="password" autocomplete="current-password" required>
-          <small>First time: your birth year + the first letter of your last name (example 2012D).</small></label>
-        <button class="btn primary block" id="sgo">Sign in as Student</button>
+        <label>Exam ID No.<input id="sid" autocomplete="username" autocapitalize="none" placeholder="2026-0001" required></label>
+        <label>Password<input id="spw" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary block" id="sgo">Sign in</button>
       </form>
     </div>
 
-    <!-- TEACHER / IT ADMIN LOGIN -->
+    <!-- EMPLOYEE (any staff account: the portal opens the right page for the account) -->
     <div id="panelStaff" role="tabpanel" aria-labelledby="tabStaff" hidden>
-      <p class="muted role-note"><b>Teachers, Registrar, Finance, Custodian and Guidance:</b> school code + Employee No. <b>IT Admins:</b> your email (leave the school code blank).</p>
       <form id="ft" novalidate>
-        <label>School code <small>Teachers, Registrar, Finance, Custodian and Guidance only. Leave blank if you are an IT Admin.</small>
-          <input id="school" autocomplete="organization" autocapitalize="characters"></label>
+        <label id="schoolWrap">School code<input id="school" autocomplete="organization" autocapitalize="characters"></label>
         <label>Employee No. or email<input id="email" autocomplete="username" autocapitalize="none" required></label>
-        <label>Password<input id="pw" type="password" autocomplete="current-password" required>
-          <small>First time (teachers): your birth year + the first letter of your last name (example 1985D).</small></label>
-        <button class="btn primary block" id="go">Sign in as Teacher / Registrar / Finance / Custodian / Guidance / IT Admin</button>
+        <label>Password<input id="pw" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary block" id="go">Sign in</button>
       </form>
     </div>
+    <p class="muted fine">First time? Your password is your birth year + the first letter of your last name (example 2012D).</p>
 
     <button class="link" id="showForgot" type="button">Forgot your password?</button>
-    <p class="muted fine">No account yet? Your school's IT Administrator creates teacher accounts, and your teacher creates student accounts.</p>
   </section>
 
   <section id="forgot" hidden>
     <h1>Reset your password</h1>
-    <p class="muted">A reset link is sent to the <b>email address on your account</b> (the one you gave when your account was created). Students: enter your Exam ID No. or email. <b>Teachers and other staff:</b> ask your school\u2019s IT Admin to email you a reset link.</p>
+    <p class="muted">A reset link is sent to the <b>email on your account</b>. Employees without an email on file: ask your IT Admin.</p>
     <form id="ff" novalidate>
-      <label id="fschoolWrap">School code <small>Teachers only. Leave blank otherwise.</small><input id="fschool" autocapitalize="characters"></label>
+      <label id="fschoolWrap">School code<input id="fschool" autocapitalize="characters"></label>
       <label>Email, Employee No. or Exam ID No.<input id="fwho" autocomplete="username" autocapitalize="none" required></label>
       <button class="btn primary block" id="fgo">Send reset link</button>
     </form>
@@ -75,12 +70,16 @@ document.addEventListener("submit", function (e) {
 </main>
 <script src="js/password-toggle.js"></script>
 <script type="module">
-import { auth, login, friendlyError, destinationFor, sendReset, getProfile, resetWithToken } from "./js/auth.js";
+import { auth, login, friendlyError, destinationFor, sendReset, getProfile, resetWithToken, warmUp } from "./js/auth.js";
 window.__arkReady = true;
+warmUp();   // wake the server while the form is being filled in: the first sign-in is no longer the slow one
 const $ = (id) => document.getElementById(id), msg = $("msg");
 const show = (t, ok) => { msg.textContent = t; msg.hidden = false; msg.className = "notice " + (ok ? "ok" : "err"); };
 if (new URLSearchParams(location.search).has("denied")) show("Your account does not have access to that page, or your school is not active.");
 try { $("school").value = localStorage.getItem("ark.schoolCode") || ""; } catch {}
+/* the school code is only needed with an Employee No.; hide it when an email is typed */
+const syncSchool = () => { $("schoolWrap").hidden = $("email").value.includes("@"); };
+$("email").addEventListener("input", syncSchool);
 
 /* ---------- Student  /  Teacher + IT Admin tabs ---------- */
 let mode = "student";
@@ -104,7 +103,7 @@ for (const t of [$("tabStudent"), $("tabStaff")]) t.addEventListener("keydown", 
   let m = "student";
   try { m = localStorage.getItem("ark.loginMode") || m; } catch {}
   const q = new URLSearchParams(location.search).get("as") || location.hash.slice(1);
-  if (q === "staff" || q === "teacher" || q === "admin") m = "staff"; else if (q === "student") m = "student";
+  if (q === "staff" || q === "employee" || q === "teacher" || q === "admin") m = "staff"; else if (q === "student") m = "student";
   setMode(m === "staff" ? "staff" : "student", false);
 }
 
@@ -139,11 +138,11 @@ $("showForgot").onclick = () => view(true); $("backSignin").onclick = () => view
 $("ff").addEventListener("submit", async (e) => {
   e.preventDefault(); msg.hidden = true;
   const who = $("fwho").value.trim(); if (!who) return show("Enter your email, Employee No. or Exam ID No.");
-  if ($("fschool").value.trim()) return show("Staff passwords are reset through your school's IT Admin: ask them to email you a reset link.");
+  if ($("fschool").value.trim()) return show("Employee passwords are reset through your IT Admin: ask them to email you a reset link.");
   $("fgo").disabled = true;
   try {
     const r = await sendReset(who, $("fschool").value);
-    if (r === "noemail") show("No email is saved for this account, so a link cannot be sent. Staff: ask your school's IT Admin to email you a reset link. Students: ask your teacher.");
+    if (r === "noemail") show("No email is saved for this account, so a link cannot be sent. Employees: ask your IT Admin. Students: ask your teacher.");
     else show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder. After choosing a new password, sign in with it.", true);
   } catch (err) {
     if (err.code === "auth/user-not-found") show("If that account has an email on file, a reset link was sent to it. Check your inbox and spam folder.", true);
@@ -163,16 +162,17 @@ async function signIn(who, password, school, wantStudent, btn) {
     const p = await getProfile(c.user.uid);
     if (p && wantStudent && p.role !== "student") {
       await auth.signOut(); btn.disabled = false;
-      return show("This is the Student sign in. Teachers, Registrar, Finance, Custodian, Guidance and IT Admins: use the staff tab.");
+      return show("This is the Student sign in. Employees: use the Employee tab.");
     }
     if (p && !wantStudent && p.role === "student") {
       await auth.signOut(); btn.disabled = false;
-      return show("This is the staff sign in. Students: use the Student tab.");
+      return show("This is the Employee sign in. Students: use the Student tab.");
     }
-    if (!wantStudent) { try { localStorage.setItem("ark.schoolCode", school.trim().toUpperCase()); } catch {} }
+    if (!wantStudent && school.trim()) { try { localStorage.setItem("ark.schoolCode", school.trim().toUpperCase()); } catch {} }
     location.href = await destinationFor(c.user);
   } catch (err) { await auth.signOut(); show(err.message); btn.disabled = false; }
 }
+syncSchool();
 $("fs").addEventListener("submit", (e) => { e.preventDefault(); signIn($("sid").value, $("spw").value, "", true, $("sgo")); });
 $("ft").addEventListener("submit", (e) => { e.preventDefault(); signIn($("email").value, $("pw").value, $("school").value, false, $("go")); });
 </script></body></html>

@@ -3,7 +3,7 @@
  * -----------------------------------------------------------------------------
  * Replaces Firebase (Firestore + Authentication + Cloud Functions).
  *   - Every Firestore collection is one TAB of this spreadsheet (created on first use).
- *   - Accounts (Super Admin, IT Admin, teachers, registrar, finance, students) are created by the
+ *   - Accounts (Super Admin, IT Admin, teachers, registrar, finance, HR, students) are created by the
  *     Super Admin / IT Admin and stored in the `users` tab; password hashes live in the `_auth` tab.
  *   - The website (GitHub Pages) NEVER touches the spreadsheet directly: it only calls this web app,
  *     which checks who is asking and applies the same rules that used to be in firestore.rules.
@@ -23,11 +23,17 @@ var BLOB_MIN = 20000;                   // bigger text fields (module file piece
 var KNOWN = ['schools', 'users', 'auditLogs', 'systemSettings', 'counters', 'classCodes', 'enrollments', 'teacherLinks', 'students',
   'scanResults', 'modules', 'moduleChunks', 'examPapers', 'examKeys', 'examSubmissions', 'examAttempts', 'classes', 'registry',
   'enrollmentRecords', 'registrarSettings', 'registrarLog', 'payments', 'studentAccounts', 'financeSettings', 'financeLog',
-  'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog'];
+  'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
+  'employees', 'hrSettings', 'hrLog'];
 var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'examKeys', 'examPapers', 'moduleChunks', 'modules',
   'examinations', 'answerKeys', 'answerSheets', 'enrollments', 'teacherLinks', 'classCodes', 'students', 'classes',
   'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog',
-  'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog'];
+  'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
+  'employees', 'hrSettings', 'hrLog'];
+/* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
+var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr'];
+var MANAGED_ROLES = EMP_ROLES.concat(['student']);
+var ACTOR_TTL = 300;                    // seconds a signed-in person's profile is remembered between requests (was 20)
 
 /* ============================== helpers ============================== */
 function fail(code, message) { var e = new Error(message || code); e.code = code; throw e; }
@@ -238,17 +244,19 @@ function authSetPassword(uid, password) {
   a.salt = newId(); a.hash = hashPw(password, a.salt); a.ver = String(+a.ver + 1); a.resetHash = ''; a.resetExp = ''; a.fails = '0'; a.lockUntil = '0';
   authPut(a); return a;
 }
-function dropActor(uid) { try { CacheService.getScriptCache().remove('a:' + uid); } catch (e) { } }
+function epoch() { try { return CacheService.getScriptCache().get('epoch') || '0'; } catch (e) { return '0'; } }
+function bumpEpoch() { try { CacheService.getScriptCache().put('epoch', newId(), 21600); } catch (e) { } }   // a school changed: forget every remembered profile
+function dropActor(uid) { try { CacheService.getScriptCache().remove('a:' + epoch() + ':' + uid); } catch (e) { } }
 
 function loadActor(token) {
   var tk = readToken(token); if (!tk) fail('unauthenticated', 'Please sign in again.');
-  var cache = CacheService.getScriptCache(), c = cache.get('a:' + tk.uid), a = c ? JSON.parse(c) : null;
+  var cache = CacheService.getScriptCache(), ck = 'a:' + epoch() + ':' + tk.uid, c = cache.get(ck), a = c ? JSON.parse(c) : null;
   if (!a) {
     var me = getDoc('users', tk.uid), au = authRow(tk.uid);
     if (!me || !au) fail('unauthenticated', 'Please sign in again.');
     var sc = me.schoolId ? getDoc('schools', me.schoolId) : null;
     a = { me: me, schoolStatus: sc ? sc.status : '', ver: au.ver };
-    cache.put('a:' + tk.uid, JSON.stringify(a), 20);
+    cache.put(ck, JSON.stringify(a), ACTOR_TTL);
   }
   if (a.ver !== tk.ver) fail('unauthenticated', 'Please sign in again.');
   return { uid: tk.uid, me: a.me, schoolStatus: a.schoolStatus, ver: a.ver };
@@ -262,7 +270,7 @@ function makeS(actor, now) {
   S.live = S.hasProfile && me.status === 'active' && me.mustChangePassword !== true && S.schoolLive;
   S.isSuper = S.live && me.role === 'superadmin'; S.isAdmin = S.live && me.role === 'admin';
   S.isTeacher = S.live && me.role === 'teacher'; S.isRegistrar = S.live && me.role === 'registrar';
-  S.isFinance = S.live && me.role === 'finance'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
+  S.isFinance = S.live && me.role === 'finance'; S.isHR = S.live && me.role === 'hr'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
   S.get = function (c, id) { return isStr(id) && id ? getDoc(c, id) : null; };
   S.exists = function (c, id) { return !!S.get(c, id); };
   S.validAdviser = function (uid) { var u = S.get('users', uid); return !!u && u.role === 'teacher' && u.schoolId === S.sid; };
@@ -299,12 +307,12 @@ var RULES = {
     create: function () { return false; },     // accounts are made by the createAccount action only
     update: function (S, id, o, n) {
       var df = diffKeys(o, n);
-      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o) && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0) ||
+      return (S.isAdmin && MANAGED_ROLES.indexOf(o.role) >= 0 && S.inMySchool(o) && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0) ||
         (S.isSuper && o.role === 'admin' && subset(df, ['status', 'updatedAt']) && ['active', 'suspended'].indexOf(n.status) >= 0);
     },
     del: function (S, id, o) {
-      return (S.isAdmin && ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0 && S.inMySchool(o)) ||
-        (S.isSuper && ['admin', 'teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(o.role) >= 0) ||
+      return (S.isAdmin && MANAGED_ROLES.indexOf(o.role) >= 0 && S.inMySchool(o)) ||
+        (S.isSuper && ['admin'].concat(MANAGED_ROLES).indexOf(o.role) >= 0) ||
         (S.isStaff && o.role === 'student' && S.studentRec(o.studentId).ownerUid === S.uid);
     }
   },
@@ -503,6 +511,17 @@ function ownRoleLog(flag) {
 RULES.custodianRecords = ownRoleRules('isCustodian'); RULES.custodianSettings = ownRoleSettings('isCustodian'); RULES.custodianLog = ownRoleLog('isCustodian');
 RULES.healthRecords = ownRoleRules('isGuidance'); RULES.guidanceRecords = ownRoleRules('isGuidance');
 RULES.guidanceSettings = ownRoleSettings('isGuidance'); RULES.guidanceLog = ownRoleLog('isGuidance');
+/* ---- HR: the employee records of the school. Only HR reads / writes them (the IT Admin sees just name, birthday and position through the `hrCandidates` action).
+   The link to a login (accountUid / accountRole) is written by the server only, never by the browser. ---- */
+var ACCT_FIELDS = ['accountUid', 'accountRole', 'accountCreatedAt'];
+function sameAcct(a, b) { return ACCT_FIELDS.every(function (k) { return jeq(a[k], b[k]); }); }
+RULES.employees = {
+  read: function (S, d) { return (S.isHR && S.inMySchool(d)) || S.isSuper; },
+  create: function (S, id, n) { return S.isHR && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId); },
+  update: function (S, id, o, n) { return S.isHR && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n); },
+  del: function (S, id, o) { return (S.isHR && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
+};
+RULES.hrSettings = ownRoleSettings('isHR'); RULES.hrLog = ownRoleLog('isHR');
 ['examinations', 'answerKeys', 'answerSheets'].forEach(function (c) {
   RULES[c] = {
     read: function (S, d) { return S.isSuper || (S.isStaff && S.mayRead(d)) || (S.isAdmin && S.inMySchool(d)); },
@@ -590,7 +609,7 @@ function applyWrite(S, op) {
     }
   }
   if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid-argument', 'Bad data.');
-  var existing = getDoc(coll, id);
+  var existing = cur;
   if (!existing) { if (!rules.create(S, id, data)) deny(); }
   else if (!rules.update(S, id, existing, data)) deny();
   putDoc(coll, id, data);
@@ -601,6 +620,7 @@ function commit(actor, ops) {
   try { ops.forEach(function (op) { applyWrite(S, op); }); flushAll(); }
   catch (e) { rollback(); throw e; }
   S.touched.forEach(function (u) { if (u !== '*') dropActor(u); });
+  if (S.touched.indexOf('*') >= 0) bumpEpoch();
   return { ok: true };
 }
 
@@ -682,7 +702,7 @@ function actResetConfirm(p) {
 
 /* ---- create an account (Super Admin -> IT Admin; IT Admin -> teacher / registrar / finance; staff -> own student) ---- */
 function actCreateAccount(actor, p) {
-  var S = makeS(actor), role = String(p.role || ''), now = S.now, me = actor.me, doc, keys = [], pw, school = null;
+  var S = makeS(actor), role = String(p.role || ''), now = S.now, me = actor.me, doc, keys = [], pw, school = null, empDoc = null, newEmp = false;
   var real = isEmail(p.realEmail) ? String(p.realEmail).trim().toLowerCase() : '';
   if (role === 'admin') {
     if (!S.isSuper) deny();
@@ -694,14 +714,28 @@ function actCreateAccount(actor, p) {
     keys = [email];
     doc = { uid: '', role: 'admin', displayName: String(p.displayName || '').trim(), email: email, schoolId: code, schoolName: name, status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
     school = { name: name, code: code, adminEmail: email, status: 'active', createdAt: { __ts: now }, createdBy: actor.uid };
-  } else if (['teacher', 'registrar', 'finance', 'custodian', 'guidance'].indexOf(role) >= 0) {
+  } else if (EMP_ROLES.indexOf(role) >= 0) {
     if (!S.isAdmin) deny();
-    var emp = String(p.employeeId || '').trim(), sc = getDoc('schools', S.sid) || {};
-    if (!emp) fail('invalid-argument', 'Enter the Employee No.');
-    pw = defaultPassword(p.lastName, p.birthday); if (!pw) fail('invalid-argument', 'The birthday is not valid.');
+    var sc = getDoc('schools', S.sid) || {}, empKey = String(p.employeeKey || ''), emp;
+    empDoc = empKey ? getDoc('employees', empKey) : null;
+    if (empDoc && empDoc.schoolId !== S.sid) empDoc = null;
+    if (!empDoc && role === 'hr') {
+      // The very first HR account: nobody can add the HR employee yet, so the IT Admin types it here and the record is made for them.
+      emp = String(p.employeeId || '').trim(); if (!emp) fail('invalid-argument', 'Enter the Employee No.');
+      empKey = staffKey(S.sid, emp); if (getDoc('employees', empKey)) fail('auth/email-already-in-use', 'That Employee No. is already in the HR list. Choose it from the list instead.');
+      empDoc = { schoolId: S.sid, employeeId: emp, lastName: String(p.lastName || '').trim(), firstName: String(p.firstName || '').trim(), middleInitial: String(p.middleInitial || '').slice(0, 1),
+        birthday: String(p.birthday || ''), position: 'HR', status: 'Active', accessType: 'hr', createdBy: actor.uid, createdAt: { __ts: now } };
+      newEmp = true;
+    }
+    if (!empDoc) fail('failed-precondition', 'HR must add this employee first. Ask HR to add them, then choose them from the list.');
+    if (empDoc.accountUid) fail('auth/email-already-in-use', 'That employee already has an account.');
+    if (empDoc.status && empDoc.status !== 'Active') fail('failed-precondition', 'That employee is not active in the HR records.');
+    emp = empDoc.employeeId;
+    pw = defaultPassword(empDoc.lastName, empDoc.birthday); if (!pw) fail('invalid-argument', 'HR must save the birthday and last name of this employee first.');
+    if (!real && isEmail(empDoc.email)) real = String(empDoc.email).trim().toLowerCase();
     keys = [staffKey(S.sid, emp)]; if (real) keys.push(real);
-    doc = { uid: '', role: role, displayName: String(p.displayName || ''), lastName: String(p.lastName || ''), firstName: String(p.firstName || ''), middleInitial: String(p.middleInitial || '').slice(0, 1),
-      email: real || String(p.email || ''), employeeId: emp, birthday: String(p.birthday || ''), schoolId: S.sid, schoolName: sc.name || '', status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
+    doc = { uid: '', role: role, displayName: fullName(empDoc), lastName: empDoc.lastName, firstName: empDoc.firstName, middleInitial: String(empDoc.middleInitial || '').slice(0, 1),
+      email: real || String(p.email || ''), employeeId: emp, birthday: empDoc.birthday, schoolId: S.sid, schoolName: sc.name || '', status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
     if (real) doc.hasRealEmail = true;
   } else if (role === 'student') {
     if (!S.isStaff) deny();
@@ -722,20 +756,61 @@ function actCreateAccount(actor, p) {
     putDoc('users', uid, doc);
     authCreate(uid, keys, pw);
     if (role === 'student') { var s2 = getDoc('students', doc.studentId); s2.accountUid = uid; if (real) s2.email = real; putDoc('students', doc.studentId, s2); }
+    if (empDoc) {   // tie the login to the HR record
+      empDoc.accountUid = uid; empDoc.accountRole = role; empDoc.accountCreatedAt = { __ts: now }; empDoc.updatedAt = { __ts: now };
+      putDoc('employees', empKey, empDoc);
+    }
     logAudit(actor.uid, doc.schoolId, role + '.create', uid, { username: doc.employeeId || doc.studentId || doc.email });
     flushAll();
+    if (empDoc) mirrorOps([{ op: 'set', coll: 'employees', id: empKey }]);
     return { uid: uid, password: pw };
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+}
+function fullName(e) { return String(e.lastName || '') + ', ' + String(e.firstName || '') + (e.middleInitial ? ' ' + e.middleInitial + '.' : ''); }
+/** IT Admin: the employees HR has added who do not have a login yet. Only what is needed to make the login is returned (no ID numbers, address ...). */
+function actHrCandidates(actor) {
+  var S = makeS(actor); if (!S.isAdmin) deny();
+  var s = scan('employees', { schoolId: [S.sid] }), t = s.t, ids = colOf(t, 0), out = [];
+  if (s.hits.length > 12) colOf(t, 4);
+  s.hits.forEach(function (h) {
+    var d = unpack(cellJson(t, h.i));
+    if (d.accountUid || (d.status && d.status !== 'Active')) return;
+    out.push({ key: ids[h.i], employeeId: d.employeeId, lastName: d.lastName, firstName: d.firstName, middleInitial: d.middleInitial || '', birthday: d.birthday || '',
+      position: d.position || '', department: d.department || '', accessType: d.accessType || '', email: isEmail(d.email) ? d.email : '' });
+  });
+  out.sort(function (a, b) { return String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName)); });
+  return { employees: out };
+}
+/** HR, once: makes an HR record for every teacher / registrar / finance / custodian / guidance / HR login the IT Admin created BEFORE the HR page existed. */
+function actHrSyncAccounts(actor) {
+  var S = makeS(actor); if (!S.isHR) deny();
+  var lock = LockService.getScriptLock(), added = []; lock.waitLock(25000);
+  try {
+    var us = scan('users', { schoolId: [S.sid] }), uids = colOf(us.t, 0), now = nowMs();
+    if (us.hits.length > 12) colOf(us.t, 4);
+    us.hits.forEach(function (h) {
+      var u = unpack(cellJson(us.t, h.i)); if (EMP_ROLES.indexOf(u.role) < 0 || !u.employeeId) return;
+      var key = staffKey(S.sid, u.employeeId); if (getDoc('employees', key)) return;
+      var nm = String(u.displayName || '').split(',');
+      putDoc('employees', key, { schoolId: S.sid, employeeId: u.employeeId, lastName: u.lastName || nm[0].trim(), firstName: u.firstName || (nm[1] || '').trim(), middleInitial: u.middleInitial || '',
+        birthday: u.birthday || '', email: u.hasRealEmail ? u.email : '', position: u.role === 'teacher' ? 'Teacher' : u.role.charAt(0).toUpperCase() + u.role.slice(1), status: 'Active', accessType: u.role,
+        accountUid: uids[h.i], accountRole: u.role, accountCreatedAt: u.createdAt || { __ts: now }, createdBy: actor.uid, createdAt: { __ts: now } });
+      added.push(key);
+    });
+    flushAll();
+  } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  if (added.length) mirrorOps(added.map(function (k) { return { op: 'set', coll: 'employees', id: k }; }));
+  return { added: added.length };
 }
 function canManage(actor, t) {
   var me = actor.me;
   if (me.role === 'superadmin') return t.role === 'admin';
-  if (me.role === 'admin') return ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(t.role) >= 0 && t.schoolId === me.schoolId;
+  if (me.role === 'admin') return MANAGED_ROLES.indexOf(t.role) >= 0 && t.schoolId === me.schoolId;
   return false;
 }
 function actSetPassword(actor, p) {
   var S = makeS(actor); if (!S.isSuper && !S.isAdmin) deny();
-  var t = getDoc('users', String(p.uid || '')); if (!t || ['admin', 'teacher', 'registrar', 'finance', 'custodian', 'guidance', 'student'].indexOf(t.role) < 0) fail('not-found', 'That account was not found.');
+  var t = getDoc('users', String(p.uid || '')); if (!t || ['admin'].concat(MANAGED_ROLES).indexOf(t.role) < 0) fail('not-found', 'That account was not found.');
   if (!canManage(actor, t)) fail('permission-denied', 'You cannot reset that account.');
   var pw = p.password;
   if (p.useDefault) {
@@ -783,8 +858,14 @@ function actDeleteUser(actor, p) {
       ['enrollments', 'teacherLinks', 'examAttempts', 'examSubmissions'].forEach(function (c) { purgeWhere(c, 'studentId', [t.studentId]); });
     }
     dropAccount(uid);
+    var unlinked = null;
+    if (EMP_ROLES.indexOf(t.role) >= 0 && t.employeeId) {   // the person stays in the HR records, but without a login
+      unlinked = staffKey(t.schoolId, t.employeeId); var e0 = getDoc('employees', unlinked);
+      if (e0 && e0.accountUid === uid) { ACCT_FIELDS.forEach(function (k) { delete e0[k]; }); e0.updatedAt = { __ts: nowMs() }; putDoc('employees', unlinked, e0); } else unlinked = null;
+    }
     logAudit(actor.uid, t.schoolId || '', t.role + '.deleted', uid, { username: t.employeeId || t.studentId || t.email });
     flushAll();
+    if (unlinked) mirrorOps([{ op: 'set', coll: 'employees', id: unlinked }]);
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
   return { ok: true };
 }
@@ -892,31 +973,32 @@ function rReqLists(d, reqs) {
   return { ok: ok, miss: miss, notes: notes, n: ok.length, total: reqs.length };
 }
 
+var _books = {};
 var REC = {
-  regStudents: { src: 'registry', tab: 'Registrar - Students', wide: [15, 16, 17, 18, 19, 20, 24],
+  regStudents: { grp: 'registrar', src: 'registry', tab: 'Registrar - Students', wide: [15, 16, 17, 18, 19, 20, 24],
     head: ['School', 'Student ID No.', 'LRN', 'Last name', 'First name', 'Middle name', 'Suffix', 'Birthdate', 'Age', 'Gender', 'Grade level', 'School year registered', 'Voucher type', 'Contact No.', 'Address',
       "Father's name", "Mother's name", "Guardian's name", 'Guardian contact No.', "Guardian's address", 'Exam ID No. (login)', 'Enrollment status', 'Additional information', 'Last updated'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), d.studentNo, d.lrn, d.lastName, d.firstName, d.middleName, d.suffix, rDate(d.birthday), rAge(d.birthday), d.gender, d.gradeLevel, d.schoolYear, d.voucherType, d.contact, d.address,
         d.father, d.mother, d.guardianName, d.guardianContact, d.guardianAddress, d.examNo, d.enrollStatus || 'Pending', rExtra(d.extra, rRegFields(cx, d.schoolId, ['reg', 'master'])), rTs(d.updatedAt || d.createdAt)];
     } },
-  regReqs: { src: 'registry', tab: 'Registrar - Requirements', wide: [9, 10, 11],
+  regReqs: { grp: 'registrar', src: 'registry', tab: 'Registrar - Requirements', wide: [9, 10, 11],
     head: ['School', 'Student ID No.', 'Student name', 'Grade level', 'School year', 'Enrollment status', 'Documents submitted (count)', 'Checklist result', 'Documents submitted (with dates)', 'Documents still missing', 'Notes', 'Checklist last updated'],
     row: function (d, id, cx) {
       var L = rReqLists(d, rReqs(cx, d.schoolId));
       return [rSchool(cx, d.schoolId), d.studentNo, d.name, d.gradeLevel, d.schoolYear, d.enrollStatus || 'Pending', L.n + ' of ' + L.total, L.n >= L.total && L.total ? 'Complete' : 'Incomplete', L.ok.join('; '), L.miss.join('; '), L.notes.join('; '), rTs(d.reqUpdatedAt)];
     } },
-  regEnroll: { src: 'enrollmentRecords', tab: 'Registrar - Enrollment', wide: [16],
+  regEnroll: { grp: 'registrar', src: 'enrollmentRecords', tab: 'Registrar - Enrollment', wide: [16],
     head: ['School', 'Student ID No.', 'LRN', 'Student name', 'Gender', 'Grade level', 'Section', 'Cluster / strand', 'Term / quarter', 'School year', 'Learning modality', 'Adviser', 'Remark', 'Remark date', 'Remark note', 'Additional information', 'Enrolled on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), d.studentNo, d.lrn, d.name, d.gender, d.gradeLevel, d.sectionName, d.strand, d.term, d.schoolYear, d.modality, d.adviserName, d.remark, rDate(d.remarkDate), d.remarkNote, rExtra(d.extra, rRegFields(cx, d.schoolId, ['enroll'])), rTs(d.createdAt)];
     } },
-  finPay: { src: 'payments', tab: 'Finance - Payments', wide: [13],
+  finPay: { grp: 'finance', src: 'payments', tab: 'Finance - Payments', wide: [13],
     head: ['School', 'Date of payment', 'Receipt / OR No.', 'Student ID No.', 'Student name', 'Grade level', 'School year', 'Voucher type', 'Payment for', 'Amount paid', 'Status', 'Reason (if voided)', 'Remarks', 'Recorded by', 'Recorded on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), rDate(d.date), d.receiptNo, d.studentNo, d.name, d.gradeLevel, d.schoolYear, d.voucherType, d.type, rMoney(d.amount), d.status === 'void' ? 'Voided' : 'Paid', d.voidReason, d.remarks, d.createdByName, rTs(d.createdAt)];
     } },
-  finBal: { src: 'studentAccounts', tab: 'Finance - Balances', wide: [11],
+  finBal: { grp: 'finance', src: 'studentAccounts', tab: 'Finance - Balances', wide: [11],
     head: ['School', 'School year', 'Student ID No.', 'Student name', 'Grade level', 'Voucher type', 'Section', 'Total to pay', 'Total paid', 'Balance', 'Breakdown', 'Payment status'],
     row: function (d, id, cx) {
       var due = +d.totalDue || 0, paid = +d.totalPaid || 0, bal = +d.balance || 0;
@@ -924,27 +1006,39 @@ var REC = {
       return [rSchool(cx, d.schoolId), d.schoolYear, d.studentNo, d.name, d.gradeLevel, d.voucherType, d.section, rMoney(due), rMoney(paid), rMoney(Math.max(0, bal)),
         (d.lines || []).map(function (l) { return l.type + ': to pay ' + rMoney(l.due) + ', paid ' + rMoney(l.paid); }).join('; '), st];
     } },
-  cusItems: { src: 'custodianRecords', tab: 'Custodian - Items', wide: [13, 14],
+  cusItems: { grp: 'custodian', src: 'custodianRecords', tab: 'Custodian - Items', wide: [13, 14],
     head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Item', 'Status', 'Size / details', 'Quantity', 'Date returned', 'Received by', 'Remarks', 'Additional information', 'Recorded by', 'Recorded on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.item, d.status, d.size, d.qty, rDate(d.dateReturned), d.receivedBy, d.remarks, rExtra(d.extra, rKindFields(cx, 'custodianSettings', d.schoolId, 'items')), d.createdByName, rTs(d.createdAt)];
     } },
-  guiHealth: { src: 'healthRecords', tab: 'Guidance - Health', wide: [14, 15, 16, 17, 18],
+  guiHealth: { grp: 'guidance', src: 'healthRecords', tab: 'Guidance - Health', wide: [14, 15, 16, 17, 18],
     head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Kind of record', 'Height', 'Weight', 'BMI', 'Vision', 'Hearing', 'Allergies', 'Medical conditions', 'Medicines taken', 'Immunization', 'Findings / complaint', 'Treatment / action', 'Health status', 'Follow-up date', 'Additional information', 'Recorded by', 'Recorded on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.type, rUnit(d.height, 'cm'), rUnit(d.weight, 'kg'), rBmi(d.height, d.weight), d.vision, d.hearing, d.allergies, d.conditions, d.medications, d.immunization,
         d.findings, d.treatment, d.healthStatus, rDate(d.followUp), rExtra(d.extra, rKindFields(cx, 'guidanceSettings', d.schoolId, 'health')), d.createdByName, rTs(d.createdAt)];
     } },
-  guiCases: { src: 'guidanceRecords', tab: 'Guidance - Counseling', wide: [8, 9, 14],
+  guiCases: { grp: 'guidance', src: 'guidanceRecords', tab: 'Guidance - Counseling', wide: [8, 9, 14],
     head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Kind of record', 'Concern / reason', 'Action taken', 'Referred to', 'Status', 'Parent / guardian informed', 'Follow-up date', 'Remarks', 'Additional information', 'Recorded by', 'Recorded on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.category, d.concern, d.action, d.referredTo, d.status, rYN(d.parentNotified), rDate(d.followUp), d.remarks, rExtra(d.extra, rKindFields(cx, 'guidanceSettings', d.schoolId, 'guidance')), d.createdByName, rTs(d.createdAt)];
+    } },
+  hrEmp: { grp: 'hr', src: 'employees', tab: 'HR - Employees', wide: [18, 26],
+    head: ['School', 'Employee No.', 'Last name', 'First name', 'Middle name', 'Birthdate', 'Age', 'Gender', 'Civil status', 'Position', 'Department', 'Employment type', 'Date hired', 'Status', 'Contact No.', 'Email', 'Address',
+      'Emergency contact', 'Emergency contact No.', 'SSS No.', 'PhilHealth No.', 'Pag-IBIG No.', 'TIN', 'PRC license No.', 'Portal account', 'Account type', 'Additional information', 'Last updated'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), d.employeeId, d.lastName, d.firstName, d.middleName || d.middleInitial, rDate(d.birthday), rAge(d.birthday), d.gender, d.civilStatus, d.position, d.department, d.employmentType, rDate(d.dateHired), d.status || 'Active',
+        d.contact, d.email, d.address, d.emergencyName, d.emergencyContact, d.sss, d.philhealth, d.pagibig, d.tin, d.prc, d.accountUid ? 'Has an account' : 'No account yet', d.accountRole || '',
+        rExtra(d.extra, ((rSettings(cx, 'hrSettings', d.schoolId).fields || {}).employee) || []), rTs(d.updatedAt || d.createdAt)];
     } }
 };
+var REC_GROUPS = { registrar: 'Registrar', finance: 'Finance', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR' };
+var REC_ORDER = ['registrar', 'finance', 'custodian', 'guidance', 'hr'];
+function recKeysOf(grp) { return Object.keys(REC).filter(function (k) { return REC[k].grp === grp; }); }
+function recIdProp(grp) { return 'RECORDS_ID_' + grp.toUpperCase(); }
 
-function recBook() {
-  var id = prop('RECORDS_ID'); if (!id) return null;
-  return SpreadsheetApp.openById(id);
+function recBook(grp) {
+  var id = prop(recIdProp(grp)); if (!id) return null;
+  return _books[grp] || (_books[grp] = SpreadsheetApp.openById(id));
 }
 function recSheet(book, key) {
   var def = REC[key], sh = book.getSheetByName(def.tab), n = def.head.length + 1;
@@ -986,29 +1080,70 @@ function recSync(book, key, putIds, delIds, cx) {
   if (add.length) { var start = Math.max(sh.getLastRow(), 1) + 1; recRows(sh, start, add.length); var r2 = sh.getRange(start, 1, add.length, n); r2.setNumberFormat('@'); r2.setValues(add); }
   delIds.map(function (id) { return pos[id]; }).filter(Boolean).sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
 }
+/* ---- keeping the readable sheets up to date ----
+   Saving must be FAST, so the portal does not write to the readable sheets while the person waits.
+   It only notes WHICH records changed (a tiny list kept in the script's properties); a background job that runs every minute
+   (menu: ARK Portal > 7. Speed up saving) copies those records into the right sheet. Without that job the copy is made at once (slower saves). */
+var MQ = 'MIRROR_Q';
+function mirrorWork(ops) {
+  var work = {};
+  (ops || []).forEach(function (op) {
+    Object.keys(REC).forEach(function (k) {
+      if (REC[k].src !== op.coll || !prop(recIdProp(REC[k].grp))) return;
+      var w = work[k] || (work[k] = { put: {}, del: {} });
+      if (op.op === 'delete') { w.del[op.id] = 1; delete w.put[op.id]; } else { w.put[op.id] = 1; delete w.del[op.id]; }
+    });
+  });
+  return work;
+}
+function mirrorQueueAdd(work) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) { setProp('RECORDS_STALE', '1'); return; }
+  try {
+    var q = {}; try { q = JSON.parse(prop(MQ) || '{}'); } catch (e) { q = {}; }
+    Object.keys(work).forEach(function (k) {
+      var e = q[k] || (q[k] = { p: {}, d: {} });
+      Object.keys(work[k].put).forEach(function (id) { e.p[id] = 1; delete e.d[id]; });
+      Object.keys(work[k].del).forEach(function (id) { e.d[id] = 1; delete e.p[id]; });
+    });
+    var js = JSON.stringify(q);
+    if (js.length > 8000) { setProp('RECORDS_STALE', '1'); setProp(MQ, ''); } else setProp(MQ, js);   // too big for a list: the background job rewrites the sheets instead
+  } finally { lock.releaseLock(); }
+}
+function mirrorApply(work) {   // writes the changed records into their sheets (call while holding the script lock)
+  var cx = rcx(), done = {};
+  Object.keys(work).forEach(function (k) {
+    var grp = REC[k].grp, book = recBook(grp); if (!book) return;
+    recSync(book, k, Object.keys(work[k].put), Object.keys(work[k].del), cx); done[k] = 1;
+  });
+}
 function mirrorOps(ops) {
   try {
-    var work = {};
-    (ops || []).forEach(function (op) {
-      Object.keys(REC).forEach(function (k) {
-        if (REC[k].src !== op.coll) return;
-        var w = work[k] || (work[k] = { put: {}, del: {} });
-        if (op.op === 'delete') { w.del[op.id] = 1; delete w.put[op.id]; } else { w.put[op.id] = 1; delete w.del[op.id]; }
-      });
-    });
-    var keys = Object.keys(work); if (!keys.length || !prop('RECORDS_ID')) return;
+    var work = mirrorWork(ops); if (!Object.keys(work).length) return;
+    if (prop('MIRROR_ASYNC') === '1') { mirrorQueueAdd(work); return; }
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) { setProp('RECORDS_STALE', '1'); return; }
-    try {
-      var book = recBook(), cx = rcx();
-      keys.forEach(function (k) { recSync(book, k, Object.keys(work[k].put), Object.keys(work[k].del), cx); });
-    } catch (e) { setProp('RECORDS_STALE', '1'); console.error('Records sheet: ' + (e && e.stack || e)); } finally { lock.releaseLock(); }
+    try { mirrorApply(work); } catch (e) { setProp('RECORDS_STALE', '1'); console.error('Records sheet: ' + (e && e.stack || e)); } finally { lock.releaseLock(); }
   } catch (e2) { console.error('Records sheet: ' + (e2 && e2.stack || e2)); }
 }
-/** Rewrites every tab of the readable sheet from the portal's data (first fill, or to repair it). */
-function recRebuild(book) {
+/** Runs every minute (time-driven trigger). */
+function mirrorFlush() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) return;
+  try {
+    var stale = prop('RECORDS_STALE') === '1', raw = prop(MQ);
+    if (!stale && !raw) return;
+    var q = {}; try { q = JSON.parse(raw || '{}'); } catch (e) { stale = true; }
+    setProp(MQ, '');
+    if (stale) { setProp('RECORDS_STALE', ''); REC_ORDER.forEach(function (g) { var b = recBook(g); if (b) { try { recRebuild(b, g); } catch (e) { setProp('RECORDS_STALE', '1'); console.error('Rebuild ' + g + ': ' + (e && e.stack || e)); } } }); return; }
+    var work = {}; Object.keys(q).forEach(function (k) { if (REC[k]) work[k] = { put: q[k].p || {}, del: q[k].d || {} }; });
+    try { mirrorApply(work); } catch (e2) { setProp('RECORDS_STALE', '1'); console.error('Records sheet: ' + (e2 && e2.stack || e2)); }
+  } finally { lock.releaseLock(); }
+}
+/** Rewrites every tab of ONE readable sheet from the portal's data (first fill, or to repair it). */
+function recRebuild(book, grp) {
   var cx = rcx(), report = [];
-  Object.keys(REC).forEach(function (k) {
+  recKeysOf(grp).forEach(function (k) {
     var def = REC[k], sh = recSheet(book, k), n = def.head.length + 1, t = T(def.src), ids = colOf(t, 0), rows = [];
     colOf(t, 4);
     for (var i = 0; i < ids.length; i++) {
@@ -1020,21 +1155,23 @@ function recRebuild(book) {
     if (rows.length) { recRows(sh, 2, rows.length); var rg = sh.getRange(2, 1, rows.length, n); rg.setNumberFormat('@'); rg.setValues(rows); }
     report.push(def.tab + ': ' + rows.length);
   });
-  _tabs = {}; setProp('RECORDS_STALE', '');
+  _tabs = {};
   return report;
 }
-function recReadMe(book) {
+function recReadMe(book, grp) {
   var sh = book.getSheets()[0];
   if (sh.getName() !== 'Read me') { try { sh.setName('Read me'); } catch (e) { } }
-  var lines = ['ARK Exam Portal - Records (readable copy)', '',
+  var who = REC_GROUPS[grp], tabs = recKeysOf(grp).map(function (k) { return '  ' + REC[k].tab; });
+  var lines = ['ARK Exam Portal - ' + who + ' records (readable copy)', '',
     'This sheet is written for people to read. Every row is one record in plain words.',
-    'It is filled in AUTOMATICALLY by the portal each time the Registrar, Finance, Custodian or Guidance saves, edits or deletes a record.',
-    '', 'Tabs:', '  Registrar - Students, Registrar - Requirements, Registrar - Enrollment', '  Finance - Payments, Finance - Balances', '  Custodian - Items', '  Guidance - Health, Guidance - Counseling',
+    'It is filled in AUTOMATICALLY (within about a minute) each time the ' + who + ' account saves, edits or deletes a record in the portal.',
+    '', 'Tabs:'].concat(tabs).concat([
     '', 'Please do NOT type in these tabs: the next save would overwrite your change. To correct a record, edit it in the portal.',
     'The last column of every tab (Record ID) is how the portal finds the row. Do not change or delete it.',
     'Use the filter buttons in the first row to search, sort or filter. Use File > Download to get Excel or PDF copies.',
-    '', 'PRIVACY: Guidance tabs hold health and counseling information. Share this Google Sheet only with people allowed to see it',
-    '(Share > Viewer). Each school appears in the School column.'];
+    '', 'PRIVACY: this sheet is for the ' + who + ' account only. Share it (Share > Viewer) only with people allowed to see these records.',
+    grp === 'guidance' ? 'It holds health and counseling information.' : grp === 'hr' ? 'It holds personal and government ID numbers of employees.' : '',
+    'Each school appears in the School column.']);
   sh.clear(); sh.getRange(1, 1, lines.length, 1).setValues(lines.map(function (l) { return [l]; }));
   sh.getRange(1, 1).setFontWeight('bold').setFontSize(14); sh.setColumnWidth(1, 760);
 }
@@ -1064,6 +1201,8 @@ function runCall(actor, c) {
         case 'superClearSchoolData': return actEraseSchool(actor, c.data || {}, false);
         case 'superDeleteSchool': return actEraseSchool(actor, c.data || {}, true);
         case 'allocIds': return actAllocIds(actor, c.data || {});
+        case 'hrCandidates': return actHrCandidates(actor);
+        case 'hrSyncAccounts': return actHrSyncAccounts(actor);
       }
   }
   fail('invalid-argument', 'Unknown request.');
@@ -1100,9 +1239,10 @@ function onOpen() {
     .addItem('2. Create / reset the Super Admin', 'menuSuper')
     .addItem('3. Set the website address (for password-reset emails)', 'menuSite')
     .addSeparator()
-    .addItem('4. Create the readable Records sheet', 'menuRecordsCreate')
-    .addItem('5. Refresh the readable Records sheet (rewrite everything)', 'menuRecordsRefresh')
-    .addItem('6. Use an existing Google Sheet as the Records sheet', 'menuRecordsLink')
+    .addItem('4. Create the readable sheets (one per user type)', 'menuRecordsCreate')
+    .addItem('5. Refresh the readable sheets (rewrite everything)', 'menuRecordsRefresh')
+    .addItem('6. Use an existing Google Sheet for one user type', 'menuRecordsLink')
+    .addItem('7. Speed up saving (turn on background sync)', 'menuSpeedOn')
     .addToUi();
 }
 function menuSetup() {
@@ -1140,32 +1280,52 @@ function menuSite() {
   setProp('SITE_URL', u); ui.alert('Saved', u, ui.ButtonSet.OK);
 }
 
-/* ---------- readable Records sheet: menu actions ---------- */
+/* ---------- readable sheets: menu actions ---------- */
+function groupLinks() { return REC_ORDER.map(function (g) { var id = prop(recIdProp(g)); return REC_GROUPS[g] + ': ' + (id ? SpreadsheetApp.openById(id).getUrl() : '(not created)'); }); }
+function finishRecords(book, grp) { recReadMe(book, grp); var rep = recRebuild(book, grp); try { book.setActiveSheet(book.getSheets()[0]); } catch (e) { } return rep; }
+function installMirrorTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'mirrorFlush') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('mirrorFlush').timeBased().everyMinutes(1).create();
+  setProp('MIRROR_ASYNC', '1');
+}
 function menuRecordsCreate() {
   var ui = SpreadsheetApp.getUi();
   if (!prop('SECRET')) { ui.alert('Run "1. First-time setup" first.'); return; }
-  if (prop('RECORDS_ID')) { ui.alert('The Records sheet already exists', 'Open it here:\n' + SpreadsheetApp.openById(prop('RECORDS_ID')).getUrl() + '\n\nUse "5. Refresh" to rewrite it from the portal data.', ui.ButtonSet.OK); return; }
-  var book = SpreadsheetApp.create('ARK Exam Portal - Records (readable copy)');
-  setProp('RECORDS_ID', book.getId());
-  var rep = finishRecords(book);
-  ui.alert('Records sheet created', 'Open it here:\n' + book.getUrl() + '\n\n' + rep.join('\n') + '\n\nFrom now on every save in the Registrar, Finance, Custodian and Guidance pages is copied into it automatically. Share it (Viewer) only with people allowed to see it.', ui.ButtonSet.OK);
+  var made = [], rep = [];
+  REC_ORDER.forEach(function (g) {
+    if (prop(recIdProp(g))) return;
+    var book = SpreadsheetApp.create('ARK Exam Portal - ' + REC_GROUPS[g] + ' records (readable copy)');
+    setProp(recIdProp(g), book.getId()); made.push(g);
+    rep = rep.concat(finishRecords(book, g));
+  });
+  try { installMirrorTrigger(); } catch (e) { ui.alert('Almost done', 'The sheets were created, but the background sync could not be turned on (' + e.message + '). Run "7. Speed up saving" and allow the permission it asks for.', ui.ButtonSet.OK); }
+  ui.alert(made.length ? 'Readable sheets created' : 'The readable sheets already exist',
+    groupLinks().join('\n') + (rep.length ? '\n\n' + rep.join('\n') : '') + '\n\nEach user type has its OWN Google Sheet: share each one (Viewer) only with that user type. They fill in automatically about a minute after each save.' +
+    (prop('RECORDS_ID') ? '\n\nThe old combined Records sheet is no longer updated. You can keep it as an archive or delete it.' : ''), ui.ButtonSet.OK);
 }
 function menuRecordsRefresh() {
-  var ui = SpreadsheetApp.getUi();
-  if (!prop('RECORDS_ID')) { ui.alert('Create the Records sheet first (menu item 4).'); return; }
-  var book = SpreadsheetApp.openById(prop('RECORDS_ID')), rep = finishRecords(book);
-  ui.alert('Records sheet refreshed', book.getUrl() + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
+  var ui = SpreadsheetApp.getUi(), rep = [], any = false;
+  REC_ORDER.forEach(function (g) { var b = recBook(g); if (!b) return; any = true; rep = rep.concat(finishRecords(b, g)); });
+  if (!any) { ui.alert('Create the readable sheets first (menu item 4).'); return; }
+  setProp('RECORDS_STALE', ''); setProp(MQ, '');
+  ui.alert('Readable sheets refreshed', groupLinks().join('\n') + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
 }
 function menuRecordsLink() {
   var ui = SpreadsheetApp.getUi();
   if (!prop('SECRET')) { ui.alert('Run "1. First-time setup" first.'); return; }
-  var r = ui.prompt('Existing Google Sheet', 'Paste the address (URL) of an EMPTY Google Sheet you own. The portal will add its tabs to it.', ui.ButtonSet.OK_CANCEL);
+  var g = ui.prompt('Which user type?', 'Type one of: ' + REC_ORDER.join(', '), ui.ButtonSet.OK_CANCEL); if (g.getSelectedButton() !== ui.Button.OK) return;
+  var grp = g.getResponseText().trim().toLowerCase(); if (REC_ORDER.indexOf(grp) < 0) { ui.alert('Please type exactly one of: ' + REC_ORDER.join(', ')); return; }
+  var r = ui.prompt('Existing Google Sheet for ' + REC_GROUPS[grp], 'Paste the address (URL) of an EMPTY Google Sheet you own. The portal will add its tabs to it.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var m = /\/d\/([A-Za-z0-9_-]+)/.exec(r.getResponseText()) || /^([A-Za-z0-9_-]{20,})$/.exec(r.getResponseText().trim());
   if (!m) { ui.alert('That does not look like a Google Sheet address.'); return; }
   var book; try { book = SpreadsheetApp.openById(m[1]); } catch (e) { ui.alert('That sheet could not be opened. Make sure you own it or can edit it.'); return; }
-  setProp('RECORDS_ID', book.getId());
-  var rep = finishRecords(book);
-  ui.alert('Records sheet linked', book.getUrl() + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
+  setProp(recIdProp(grp), book.getId()); delete _books[grp];
+  var rep = finishRecords(book, grp);
+  ui.alert(REC_GROUPS[grp] + ' sheet linked', book.getUrl() + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);
 }
-function finishRecords(book) { recReadMe(book); var rep = recRebuild(book); try { book.setActiveSheet(book.getSheets()[0]); } catch (e) { } return rep; }
+function menuSpeedOn() {
+  var ui = SpreadsheetApp.getUi();
+  try { installMirrorTrigger(); } catch (e) { ui.alert('Could not turn it on', e.message + '\n\nIf Google asks for permission, allow it, then run this menu item again.', ui.ButtonSet.OK); return; }
+  ui.alert('Background sync is on', 'Saving in the portal is now faster: the readable sheets are updated by a background job that runs every minute (so they can be up to about a minute behind).', ui.ButtonSet.OK);
+}

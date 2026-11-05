@@ -7,8 +7,8 @@ reached only through a small **Google Apps Script** web app that checks who is a
 GitHub Pages (this repo)  ->  Apps Script web app (apps-script/Code.gs)  ->  Google Sheet (database) + Google Drive (module files)
 ```
 
-Accounts are created only by the **Super Admin** (schools + IT Admins) and the **IT Admin** (teachers, registrar, finance, custodian, guidance);
-teachers activate their own students. They are stored in the `users` tab; password hashes are in `_auth`.
+Accounts are created only by the **Super Admin** (schools + IT Admins) and the **IT Admin** (teachers, registrar, finance, custodian, guidance, HR);
+teachers activate their own students. **Employees are added by HR first**; the IT Admin then creates the login from HR's list (see "HR and employee accounts" below). They are stored in the `users` tab; password hashes are in `_auth`.
 
 ## Setup (about 15 minutes, once)
 
@@ -32,9 +32,15 @@ Open the site > **Teacher / Registrar / Finance / IT Admin** tab > sign in with 
 Register a school and its IT Admin; the temporary password is shown once. The IT Admin then creates the teacher,
 registrar and finance accounts, and teachers add and activate students, exactly as before.
 
-### 4. The readable Records sheet (second Google Sheet)
-In the spreadsheet menu choose **ARK Portal > 4. Create the readable Records sheet**. Registrar, Finance, Custodian and Guidance records are then copied into it automatically as plain, readable rows
-(see `CHANGES.md`). Share it as Viewer only with people allowed to read it.
+### 4. The readable sheets (one Google Sheet per user type)
+In the spreadsheet menu choose **ARK Portal > 4. Create the readable sheets (one per user type)**. It creates five separate Google Sheets: **Registrar, Finance, Custodian, Guidance and HR**.
+Each one is filled in automatically with plain, readable rows. Share each sheet (Viewer) only with that user type, so the Finance sheet never exposes health records, and so on.
+The same menu item turns on the background sync (below). Menu 5 rewrites a sheet from the portal data if it ever needs repair; menu 6 uses a Google Sheet you already made for one user type.
+
+### 5. Speed
+* **Saving** no longer waits for the readable sheets: the portal only notes which records changed, and a background job (every minute) copies them. Turn it on with **ARK Portal > 7. Speed up saving** (menu 4 does this too; Google asks for one extra permission the first time).
+  The readable sheets can therefore be up to about a minute behind. The portal itself is always current.
+* **Pages** open without waiting for a separate "who am I" request, repeated lists are remembered for a few seconds, and the sign-in page wakes the server while you type.
 
 ## When you change `Code.gs` later
 Apps Script > **Deploy > Manage deployments > pencil > Version: New version > Deploy**. (The URL stays the same.)
@@ -50,6 +56,16 @@ Apps Script > **Deploy > Manage deployments > pencil > Version: New version > De
 * **Sessions** last 12 hours. Six wrong passwords lock that account for 5 minutes.
 * The Web app URL is public but harmless: every request is checked against the signed-in person's role, school and owner.
 * The old Firebase version's feature notes are kept in `docs/FEATURES-HISTORY-firebase-era.md` (ignore the Firebase setup parts).
+
+## HR and employee accounts
+1. The IT Admin creates **one HR account** first (Accounts > Account type *HR* > *New HR person*). The HR person's record is made automatically.
+2. **HR** signs in and adds every employee (also people who will never sign in, such as a driver or guard): name, Employee No., birthday, position, department, contact, government IDs, and which portal account the person needs (if any).
+   If accounts already existed before the HR page, HR presses **Settings > Add the existing accounts to the HR records** once.
+3. The **IT Admin** opens Accounts, chooses the employee from HR's list and the account type, and creates the login. The IT Admin only sees name, Employee No., birthday and position, never the HR details.
+4. The login is linked to the HR record. HR sees **Has an account**; removing the account keeps the employee in the HR records. An employee who has an account cannot be deleted from HR until the account is removed.
+
+## Sign in
+The sign-in page has two tabs: **Student** (Exam ID No.) and **Employee** (school code + Employee No., or your email when you are an IT Admin / Super Admin). The portal opens the right page for the account.
 
 ## What changed from the Firebase version
 | Before | Now |

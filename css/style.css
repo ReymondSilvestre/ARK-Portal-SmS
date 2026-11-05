@@ -536,3 +536,8 @@ select:disabled,input:disabled,textarea:disabled{color:#555;background-color:#f1
 textarea.tall{min-height:5.2rem}
 .row label.wide2{flex:2 1 24rem} .row label.full{flex:1 1 100%}
 .notice.info{background:#eef3ff;border-color:#a9b9e8;color:#1a3f9c}
+
+/* ---------- HR page ---------- */
+tr[hidden]{display:none!important}
+.panel h3{margin:1rem 0 .4rem;font-size:1rem;color:var(--muted)}
+.row textarea.tall{min-height:7rem}

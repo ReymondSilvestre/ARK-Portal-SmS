@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IT Admin - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
+<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>IT Admin - SylverVibe Code - Exam Portal</title><link rel="stylesheet" href="css/style.css"></head>
 <body>
 <div class="shell">
   <aside class="side">
@@ -35,23 +35,25 @@
 
     <section data-view="teachers" hidden>
       <div class="panel">
-        <h2>Add a faculty / teacher, registrar, finance, custodian or guidance account</h2>
-        <p class="muted">Only you can create teacher, registrar, finance, custodian and guidance accounts for this school. The <b>Registrar</b> registers and enrols students, keeps the school-requirements checklist and assigns each section's adviser; the adviser (teacher) then activates the student accounts. <b>Finance</b> records school payments and shows each student's balance. The <b>Custodian</b> records the uniforms, P.E. uniforms, IDs and other items given to students. <b>Guidance</b> keeps the students' health and guidance records.</p>
+        <h2>Create an employee account</h2>
+        <p class="muted"><b>HR adds the employee first</b> (name, Employee No., birthday, position ...). You then choose that employee below and pick the account type. The employee signs in with the school code + Employee No.; the first password is the birth year + first letter of the last name (example <b>1985D</b>) and must be changed at first sign-in.</p>
         <form id="newT" class="row" novalidate>
-          <label>Account type<select name="role"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option></select></label>
-          <label>Last name<input name="lastName" autocomplete="off" required></label>
-          <label>First name<input name="firstName" autocomplete="off" required></label>
-          <label class="narrow">M.I.<input name="mi" maxlength="1" autocomplete="off"></label>
-          <label>Employee No.<input name="employeeId" autocomplete="off" required></label>
-          <label>Birthday<input name="birthday" type="date" required></label>
+          <label>Employee <small id="empHint">Added by HR</small><select name="employee" id="empSel"></select></label>
+          <label>Account type<select name="role" id="roleSel"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option><option value="hr">HR</option></select></label>
           <label>Email <small>Optional. Used for password reset.</small><input name="email" type="email" autocomplete="off" placeholder="Leave blank: reset links go to your inbox"></label>
           <button class="btn primary" id="addBtn">Create account</button>
         </form>
-        <small>Username = Employee No. (with the school code), for teachers, registrar, finance, custodian and guidance staff alike. Temporary password = birth year + first letter of the last name (example <b>1985D</b>). The teacher must choose a new password at first sign-in. If you enter the teacher's <b>real email</b>, the account is created with that email: they can still sign in with school code + Employee No., and <b>Forgot your password?</b> sends the reset link to that email.</small>
+        <div class="infogrid" id="empInfo" hidden></div>
+        <div id="manualWrap" hidden>
+          <p class="muted"><b>First HR account.</b> Nobody can add employees until there is an HR account, so type the HR person here. They are added to the HR records automatically.</p>
+          <div class="row"><label>Last name<input id="mLast" autocomplete="off"></label><label>First name<input id="mFirst" autocomplete="off"></label><label class="narrow">M.I.<input id="mMi" maxlength="1" autocomplete="off"></label>
+            <label>Employee No.<input id="mNo" autocomplete="off"></label><label>Birthday<input id="mBirth" type="date"></label></div>
+        </div>
+        <small>If you enter a <b>real email</b>, the person can also sign in with it and <b>Forgot your password?</b> sends the link there. The employee must be <b>Active</b> in the HR records.</small>
       </div>
       <div class="panel">
         <div class="row"><label>Search<input id="q" placeholder="Name, Employee No. or Exam ID No."></label>
-          <label>Show<select id="roleF"><option value="">Teachers and students</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="student">Students only</option></select></label></div>
+          <label>Show<select id="roleF"><option value="">All accounts</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="hr">HR only</option><option value="student">Students only</option></select></label></div>
         <div class="tablewrap"><table id="teachers"></table></div>
       </div>
     </section>
