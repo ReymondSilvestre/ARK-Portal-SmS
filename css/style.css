@@ -643,3 +643,10 @@ body.has-side .main>h1{margin:.2rem 0 .8rem}
   body.has-side .side .who .btn{min-height:2.9rem}
   body.has-side .side-photo-wrap,body.has-side .side-photo,body.has-side .side-avatar{width:88px;height:88px}
 }
+
+/* ---- photo cropper (HR: drag the picture to center it before saving) ---- */
+.crop-view{position:relative;width:260px;height:260px;max-width:100%;margin:.4rem auto .8rem;overflow:hidden;border:1px solid var(--ink);border-radius:8px;background:#222;cursor:grab;touch-action:none;user-select:none}
+.crop-view.grab{cursor:grabbing}
+.crop-view img{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;pointer-events:none}
+.crop-ring{position:absolute;inset:0;pointer-events:none;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.45);outline:2px dashed #fff;outline-offset:-2px}
+.lv-pop-box input[type=range]{padding:0;min-height:0}
