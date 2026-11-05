@@ -139,7 +139,12 @@ $("newT").addEventListener("submit", async (e) => {
     e.target.reset(); $("manualWrap").hidden = true;
     popup(ROLE_NAME[role] + " account created", `Sign-in: school code ${school.code}, Employee No. ${employeeId}${realEmail ? ` (or the email ${realEmail})` : ""}. Temporary password (birth year + first letter of last name). They must choose a new one at first sign-in.` + (realEmail ? ` Forgot-password links go to ${realEmail}.` : " No email was given, so password help goes through you."), made.password);
     await refresh();
-  } catch (err) { flash(friendlyError(err)); }
+  } catch (err) {
+    const m = String((err && err.message) || "");
+    flash(/unknown account type/i.test(m)
+      ? "The server (Google Apps Script) is still the OLD version and does not know the HR account type. Open Apps Script, paste the newest apps-script/Code.gs, then Deploy > Manage deployments > pencil > Version: New version > Deploy. Then reload this page and try again."
+      : friendlyError(err));
+  }
   finally { $("addBtn").disabled = false; }
 });
 

@@ -746,7 +746,7 @@ function actCreateAccount(actor, p) {
     keys = [studentKey(st.number)]; if (real) keys.push(real);
     doc = { uid: '', role: 'student', displayName: st.name, email: real || String(p.email || ''), studentId: st.number, birthday: st.birthday, schoolId: S.sid, schoolName: me.schoolName || '', status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
     if (real) doc.hasRealEmail = true;
-  } else fail('invalid-argument', 'Unknown account type.');
+  } else fail('invalid-argument', 'Unknown account type: ' + role);
   var lock = LockService.getScriptLock(); lock.waitLock(25000);
   try {
     if (role === 'admin' && getDoc('schools', school.code)) fail('invalid-argument', 'That school code is already used. Choose another.');
