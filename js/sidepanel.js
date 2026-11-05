@@ -37,3 +37,14 @@ if (tabs && nav && !nav.children.length) {
   build();
   new MutationObserver(build).observe(tabs, { attributes: true, attributeFilter: ["class", "hidden"], childList: true, subtree: true, characterData: true });
 }
+
+/* ---- connection indicator, repeated in the side panel just below the photo (it mirrors the one in the top bar) ---- */
+const topSync = $("sync"), wrap = document.querySelector("#sideProfile .side-photo-wrap");
+if (topSync && wrap) {
+  const mine = document.createElement("div"); mine.className = "side-sync"; mine.id = "sideSync"; mine.setAttribute("role", "status");
+  mine.innerHTML = '<i class="dot"></i><span></span>';
+  wrap.insertAdjacentElement("afterend", mine);
+  const copy = () => { mine.classList.toggle("off", topSync.classList.contains("off")); mine.lastElementChild.textContent = (topSync.lastElementChild && topSync.lastElementChild.textContent) || "Online"; };
+  new MutationObserver(copy).observe(topSync, { attributes: true, childList: true, subtree: true, characterData: true });
+  copy();
+}
