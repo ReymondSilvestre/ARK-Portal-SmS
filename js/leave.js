@@ -24,6 +24,30 @@ export async function loadLeaveTypes(sid) {
   return DEFAULT_LEAVE_TYPES;
 }
 
+/** A message that pops up in the CENTER of the screen (instead of a banner at the top or bottom of the page).
+ *  buttons: [{ label, value, primary }]; input: { label, required } adds a text box. Resolves { value, text } (value null when closed with Esc / outside). */
+export function showPopup({ title = "", html = "", ok, buttons, input } = {}) {
+  return new Promise((resolve) => {
+    const el = document.createElement("div"); el.className = "lv-pop"; el.setAttribute("role", "alertdialog"); el.setAttribute("aria-modal", "true");
+    const bs = buttons && buttons.length ? buttons : [{ label: "OK", value: "ok", primary: true }];
+    el.innerHTML = `<div class="lv-pop-box${ok === true ? " ok" : ok === false ? " err" : ""}"><h3>${esc(title)}</h3><div class="lv-pop-body">${html}</div>
+      ${input ? `<label>${esc(input.label || "")}<textarea class="tall" maxlength="500" id="lvPopText" placeholder="${esc(input.placeholder || "")}"></textarea></label><p class="lv-pop-err" id="lvPopErr" hidden></p>` : ""}
+      <div class="lv-pop-btns">${bs.map((b, i) => `<button type="button" class="btn${b.primary ? " primary" : ""}${b.danger ? " danger" : ""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div></div>`;
+    document.body.append(el);
+    const done = (value) => { el.remove(); removeEventListener("keydown", key); resolve({ value, text: (el.querySelector("#lvPopText") || {}).value || "" }); };
+    const key = (e) => { if (e.key === "Escape") { e.stopPropagation(); done(null); } };
+    addEventListener("keydown", key);
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-i]"); if (!b) return;
+      const def = bs[+b.dataset.i], t = el.querySelector("#lvPopText");
+      if (input && input.required && def.primary && !t.value.trim()) { const er = el.querySelector("#lvPopErr"); er.textContent = input.required === true ? "Please write something first." : input.required; er.hidden = false; t.focus(); return; }
+      done(def.value);
+    });
+    (el.querySelector("#lvPopText") || el.querySelector(".btn.primary") || el.querySelector(".btn")).focus();
+  });
+}
+export const errText = (e) => friendlyError(e) + (e && e.code === "permission-denied" ? " If this keeps happening, make sure the newest Code.gs is deployed in Apps Script (Deploy > Manage deployments > pencil > New version > Deploy)." : "");
+
 const ROLES = ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "admin"];
 const m = await requireRole(ROLES).catch(() => null);
 if (m) start(m);
@@ -45,8 +69,7 @@ function start({ user, profile }) {
   /* ---- the window ---- */
   const back = document.createElement("div"); back.className = "lv-back"; back.hidden = true;
   back.innerHTML = `<div class="lv-box" role="dialog" aria-modal="true" aria-label="Leave request"><div class="lv-head"><h2>Leave request</h2><button class="btn small" type="button" id="lvClose">Close</button></div>
-    <div id="lvMsg" class="notice" hidden role="alert"></div>
-    <form id="lvForm" novalidate><div class="row">
+        <form id="lvForm" novalidate><div class="row">
       <label>Leave type<select id="lvType"></select></label>
       <label>From<input type="date" id="lvFrom"></label><label>To<input type="date" id="lvTo"></label>
       <label class="narrow">Working days<input type="number" id="lvDays" min="0.5" max="366" step="0.5"></label></div>
@@ -56,7 +79,7 @@ function start({ user, profile }) {
     <h3>My requests</h3><div class="tablewrap"><table id="lvList"></table></div></div>`;
   document.body.append(back);
   const $ = (id) => back.querySelector("#" + id);
-  const flash = (t, ok) => { const n = $("lvMsg"); n.textContent = t; n.className = "notice " + (ok ? "ok" : "err"); n.hidden = false; };
+  const flash = (t, ok) => { showPopup({ title: ok ? "Done" : "Could not send", html: `<p>${esc(t)}</p>`, ok: !!ok }); };
   const close = () => { back.hidden = true; open = false; document.body.classList.remove("lv-open"); };
   const usedBy = (type) => mine.filter((r) => r.status === "Approved" && r.leaveType === type && (r.startDate || "").startsWith(String(YEAR))).reduce((a, r) => a + (+r.days || 0), 0);
 
@@ -84,7 +107,7 @@ function start({ user, profile }) {
   $("lvClose").onclick = close; back.addEventListener("click", (e) => { if (e.target === back) close(); }); addEventListener("keydown", (e) => { if (e.key === "Escape" && open) close(); });
 
   $("lvForm").addEventListener("submit", async (e) => {
-    e.preventDefault(); $("lvMsg").hidden = true;
+    e.preventDefault();
     const type = $("lvType").value, a = $("lvFrom").value, b = $("lvTo").value, days = +$("lvDays").value, reason = $("lvReason").value.trim();
     if (!type) return flash("Choose the kind of leave.");
     if (!a || !b) return flash("Enter the first and the last day of the leave.");
@@ -97,23 +120,29 @@ function start({ user, profile }) {
       await setDoc(ref, { schoolId: SID, requesterUid: UID, requesterName: profile.displayName || "", requesterRole: profile.role, employeeId: profile.employeeId || "", leaveType: type, startDate: a, endDate: b, days, reason, status: "Pending", createdAt: serverTimestamp() });
       mine.push({ id: ref.id, schoolId: SID, requesterUid: UID, leaveType: type, startDate: a, endDate: b, days, reason, status: "Pending", createdAt: Timestamp.now() });
       $("lvReason").value = ""; $("lvFrom").value = ""; $("lvTo").value = ""; $("lvDays").value = "";
-      renderList(); renderBalance(); flash("Your leave request was sent to HR.", true);
-    } catch (err) { console.error(err); flash(friendlyError(err)); } finally { $("lvSend").disabled = false; }
+      renderList(); renderBalance(); flash(`Your ${type.toLowerCase()} request (${rangeText({ startDate: a, endDate: b })}, ${days} day${days === 1 ? "" : "s"}) was sent to HR. You will see the answer here.`, true);
+    } catch (err) { console.error(err); flash(errText(err)); } finally { $("lvSend").disabled = false; }
   });
   $("lvList").addEventListener("click", async (e) => {
     const c = e.target.closest("[data-c]"), d = e.target.closest("[data-d]"); if (!c && !d) return;
     const r = mine.find((x) => x.id === (c || d).dataset[c ? "c" : "d"]); if (!r) return;
-    if (!confirm(c ? "Cancel this leave request?" : "Remove this request from your list?")) return;
+    if ((await showPopup({ title: c ? "Cancel this leave request?" : "Remove this request?", html: `<p>${esc(r.leaveType)}, ${esc(rangeText(r))}</p>`, buttons: [{ label: "Keep it", value: "no" }, { label: c ? "Cancel request" : "Remove", value: "yes", primary: true }] })).value !== "yes") return;
     try {
       if (c) { await updateDoc(doc(db, "leaveRequests", r.id), { status: "Cancelled", updatedAt: serverTimestamp() }); r.status = "Cancelled"; }
       else { await deleteDoc(doc(db, "leaveRequests", r.id)); mine = mine.filter((x) => x.id !== r.id); }
       renderList(); renderBalance(); setBadge();
-    } catch (err) { console.error(err); flash(friendlyError(err)); }
+    } catch (err) { console.error(err); flash(errText(err)); }
   });
 
   btn.onclick = () => {
-    back.hidden = false; open = true; document.body.classList.add("lv-open"); $("lvMsg").hidden = true;
-    load().then(() => { localStorage.setItem(SEEN, String(Date.now())); setBadge(); }).catch((err) => flash(friendlyError(err)));
+    back.hidden = false; open = true; document.body.classList.add("lv-open");
+    load().then(() => { localStorage.setItem(SEEN, String(Date.now())); setBadge(); }).catch((err) => flash(errText(err)));
   };
-  load().catch(() => { });   // quietly, so the button can say "(1 new)" when HR has answered
+  load().then(() => {   // HR answered while the person was away: tell them in the middle of the screen
+    const seen = +(localStorage.getItem(SEEN) || 0), fresh = mine.filter((r) => r.status !== "Pending" && r.status !== "Cancelled" && (r.decidedAt?.toMillis?.() || 0) > seen);
+    if (!fresh.length) return;
+    showPopup({ title: fresh.length === 1 ? "HR answered your leave request" : `HR answered ${fresh.length} leave requests`, ok: fresh.every((r) => r.status === "Approved"),
+      html: fresh.map((r) => `<p><b>${esc(r.leaveType)}</b> (${esc(rangeText(r))}): <span class="badge ${STATUS_CLASS[r.status] || ""}">${esc(r.status)}</span>${r.hrRemarks ? `<br><small>${esc(r.hrRemarks)}</small>` : ""}</p>`).join(""),
+      buttons: [{ label: "Close", value: "close" }, { label: "View my requests", value: "view", primary: true }] }).then((a) => { localStorage.setItem(SEEN, String(Date.now())); setBadge(); if (a.value === "view") btn.click(); });
+  }).catch(() => { });
 }

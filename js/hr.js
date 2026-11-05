@@ -3,7 +3,7 @@
    Records are stored per school in `employees` and are copied (in plain words) into the HR readable Google Sheet by the server. */
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding, staffKey, defaultStudentPassword } from "./auth.js";
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, deleteField, callFn, Timestamp } from "./db.js";
-import { DEFAULT_LEAVE_TYPES, STATUS_CLASS, rangeText, roleName } from "./leave.js";   // also puts the "Leave request" button (HR files its own leave too) in the top bar
+import { DEFAULT_LEAVE_TYPES, STATUS_CLASS, rangeText, roleName, showPopup, errText } from "./leave.js";   // also puts the "Leave request" button (HR files its own leave too) in the top bar
 
 const $ = (id) => document.getElementById(id);
 const { user, profile, school } = await requireRole(["hr"]);
@@ -312,21 +312,27 @@ function renderLeave() {
   $("lvYear").onchange = (e) => { LV.year = +e.target.value; renderLeave(); }; $("lvXls").onclick = () => leaveExcel(rows, people, cols, year);
   const tb = $("tabs").querySelector('[data-t="leave"]'); if (tb) tb.textContent = pend.length ? `Leave (${pend.length})` : "Leave";
 }
-sec("leave").addEventListener("click", (e) => { const b = e.target.closest("button[data-lv]"); if (!b) return; const r = S.leave.find((x) => x.id === b.dataset.id); if (r) run(() => decide(r, b.dataset.lv)); });
+sec("leave").addEventListener("click", (e) => { const b = e.target.closest("button[data-lv]"); if (!b) return; const r = S.leave.find((x) => x.id === b.dataset.id); if (r) decide(r, b.dataset.lv); });
 async function decide(r, status) {
+  const who = `<p><b>${esc(r.requesterName)}</b><br>${esc(r.leaveType)}, ${esc(rangeText(r))} (${esc(r.days)} day${+r.days === 1 ? "" : "s"})${r.reason ? `<br><small>${esc(r.reason)}</small>` : ""}</p>`;
   let remarks = "";
-  if (status === "Rejected") { const a = prompt(`Why is this leave rejected? (the employee will read it)`, ""); if (a === null) return; remarks = a.trim(); if (!remarks) return flash("Please write a short reason for rejecting the leave."); }
-  else if (status === "Approved") {
+  if (status === "Rejected") {
+    const a = await showPopup({ title: "Reject this leave?", html: who, input: { label: "Reason (the employee will read it)", required: "Please write a short reason for rejecting." }, buttons: [{ label: "Back", value: "no" }, { label: "Reject leave", value: "yes", primary: true, danger: true }] });
+    if (a.value !== "yes") return; remarks = a.text.trim();
+  } else if (status === "Approved") {
     const t = S.leaveTypes.find((x) => x.name === r.leaveType), used = usedDays(S.leave.filter((x) => x.requesterUid === r.requesterUid), r.leaveType, String(r.startDate).slice(0, 4));
-    if (t && +t.days > 0 && used + (+r.days || 0) > t.days && !confirm(`${r.requesterName} has used ${r1(used)} of ${t.days} days of ${r.leaveType}. Approving ${r.days} more goes over the limit. Approve anyway?`)) return;
-    const a = prompt("Remarks for the employee (optional):", ""); if (a === null) return; remarks = a.trim();
-  } else if (!confirm(`Reopen this request from ${r.requesterName}? It goes back to Pending.`)) return;
+    const over = t && +t.days > 0 && used + (+r.days || 0) > t.days ? `<p class="lv-pop-err">${esc(r.requesterName)} has used ${r1(used)} of ${t.days} days of ${esc(r.leaveType)}. Approving ${esc(r.days)} more goes over the limit.</p>` : "";
+    const a = await showPopup({ title: "Approve this leave?", html: who + over, input: { label: "Remarks for the employee (optional)" }, buttons: [{ label: "Back", value: "no" }, { label: "Approve leave", value: "yes", primary: true }] });
+    if (a.value !== "yes") return; remarks = a.text.trim();
+  } else if ((await showPopup({ title: "Reopen this request?", html: who + "<p>It goes back to Pending.</p>", buttons: [{ label: "Back", value: "no" }, { label: "Reopen", value: "yes", primary: true }] })).value !== "yes") return;
   const b = writeBatch(), ref = doc(db, "leaveRequests", r.id), patch = { status, updatedAt: serverTimestamp() };
   if (status === "Pending") { patch.hrRemarks = deleteField(); patch.decidedBy = deleteField(); patch.decidedByName = deleteField(); patch.decidedAt = deleteField(); }
   else { patch.hrRemarks = remarks; patch.decidedBy = user.uid; patch.decidedByName = profile.displayName; patch.decidedAt = serverTimestamp(); }
   b.update(ref, patch);
   b.set(doc(collection(db, "hrLog")), { schoolId: SID, byUid: user.uid, byName: profile.displayName, action: status === "Pending" ? "Reopened leave request" : `${status} leave (${r.leaveType}, ${rangeText(r)})`, targetName: r.requesterName || "", targetNo: r.employeeId || "", createdAt: serverTimestamp() });
-  await b.commit(); S.logLoaded = false; await loadLeave(); flash(status === "Pending" ? "The request is open again." : `Leave ${status.toLowerCase()}.`, true);
+  try { await b.commit(); } catch (e) { console.error(e); return showPopup({ title: "The decision was not saved", html: `<p>${esc(errText(e))}</p>`, ok: false }); }
+  S.logLoaded = false; await loadLeave();
+  showPopup({ title: status === "Pending" ? "Request reopened" : status === "Approved" ? "Leave approved" : "Leave rejected", html: `<p>${esc(r.requesterName)}: ${esc(r.leaveType)}, ${esc(rangeText(r))}.</p>`, ok: status !== "Rejected" });
 }
 function leaveExcel(rows, people, cols, year) {
   if (!window.XLSX) return flash("The Excel writer did not load. Check your internet connection.");
@@ -342,3 +348,14 @@ renderSettings();
 renderAll();
 show("dash");
 await refresh();
+
+/* New leave requests pop up in the middle of the screen when HR opens the page (once for each new request). */
+(function notifyPending() {
+  const pend = S.leave.filter((r) => r.status === "Pending" && r.requesterUid !== user.uid); if (!pend.length) return;
+  const KEY = "ark.hrLeaveSeen." + user.uid; let known = []; try { known = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { }
+  const fresh = pend.filter((r) => !known.includes(r.id)); if (!fresh.length) return;
+  try { localStorage.setItem(KEY, JSON.stringify(pend.map((r) => r.id))); } catch { }
+  showPopup({ title: fresh.length === 1 ? "New leave request" : `${fresh.length} new leave requests`, ok: undefined,
+    html: fresh.slice(0, 6).map((r) => `<p><b>${esc(r.requesterName)}</b> (${esc(roleName(r.requesterRole))})<br>${esc(r.leaveType)}, ${esc(rangeText(r))}, ${esc(r.days)} day${+r.days === 1 ? "" : "s"}${r.reason ? `<br><small>${esc(r.reason)}</small>` : ""}</p>`).join("") + (fresh.length > 6 ? `<p>and ${fresh.length - 6} more...</p>` : ""),
+    buttons: [{ label: "Later", value: "later" }, { label: "Review now", value: "go", primary: true }] }).then((a) => { if (a.value === "go") { LV.st = "Pending"; renderLeave(); show("leave"); } });
+})();
