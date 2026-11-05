@@ -1,4 +1,4 @@
-# SylverVibe Code - Exam Portal
+# ARK-Portal Sms
 
 ## Update: Registrar dashboard + enrolled masterlist, and the new FINANCE user
 **Do this first:** Firestore > Rules > paste `firestore.rules` > Publish (adds the Finance role and the `payments`, `studentAccounts`, `financeSettings` and `financeLog` collections). Then upload the whole project (new files: `finance.html`, `js/finance.js`; changed: `registrar.html`, `js/registrar.js`, `js/auth.js`, `js/admin.js`, `js/student.js`, `admin.html`, `student.html`, `login.html`, `change-password.html`, `css/style.css`, `js/superadmin.js`). If you use the Cloud Functions, deploy `functions/` again. No index changes.

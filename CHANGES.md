@@ -1,5 +1,16 @@
 # Revision notes
 
+## NEW: Leave requests (all employee accounts) and HR leave monitoring
+**To apply:** (1) paste the new `apps-script/Code.gs` into Apps Script, then **Deploy > Manage deployments > pencil > New version > Deploy**; (2) upload the whole site folder to GitHub again (new file: `js/leave.js`; changed: `hr.html`, `js/hr.js`, `css/style.css` and the IT Admin, teacher, registrar, finance, custodian and guidance pages). No new spreadsheet tab setup is needed: the `leaveRequests` tab is created on first use, and the HR readable sheet gets a new tab **HR - Leave requests** (run menu 5 once if you want the tab to appear before the first request).
+
+* **Every employee account can send a leave request to HR:** teacher, registrar, finance, custodian, guidance, HR and the **IT Admin**. A **Leave request** button appears in the top bar (the IT Admin has it on the left side bar). It opens the leave form (leave type, dates, working days, reason) and the person's own requests with their status and HR's remarks. Pending requests can be cancelled. The button shows "(1 new)" when HR has answered.
+* **HR > Leave tab (new):** requests waiting for a decision (the tab shows the count), Approve / Reject (a reason is required to reject) / Reopen, filters, Excel download, who is on leave now and coming up, and **leave monitoring**: for each employee the days used and left per leave type for the chosen year, plus days waiting. Approving past the yearly limit asks for confirmation.
+* **HR > Settings > Leave types:** edit the leave types and the days a year (default: Vacation 15, Sick 15, Emergency 3, Maternity/Paternity, Leave without pay, Other).
+* HR dashboard: new cards "Leave requests waiting" and "On leave today"; the Employees list shows an **On leave today** badge. HR can still edit every employee's details (Employees > Edit). Decisions are written to HR > History.
+* Security: an employee reads and cancels only their own requests; only HR of the same school reads and decides all of them, and HR cannot decide their own request (another HR account must).
+
+---
+
 ## NEW: HR account, per-role readable sheets, faster pages, simpler sign-in
 **To apply:** (1) paste the new `apps-script/Code.gs` and `appsscript.json` into Apps Script, then **Deploy > Manage deployments > pencil > New version > Deploy**; (2) reload the spreadsheet and run **ARK Portal > 4. Create the readable sheets** (allow the new permission when Google asks); (3) upload the whole site folder to GitHub again (new files: `hr.html`, `js/hr.js`).
 

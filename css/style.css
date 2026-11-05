@@ -263,7 +263,7 @@ details.bulk{border:1px dashed var(--line);border-radius:6px;padding:.5rem .8rem
 .pw-toggle:hover{background:#e6e6e8}
 .role-note{margin:0 0 1rem}
 
-/* SylverVibe Code logo in the page header */
+/* ARK-Portal Sms logo in the page header */
 .mark.logo{background:none;border:0;padding:0;line-height:0}
 .mark.logo img{height:44px;width:auto;display:block}
 .auth-card .mark.logo img{height:64px}
@@ -541,3 +541,14 @@ textarea.tall{min-height:5.2rem}
 tr[hidden]{display:none!important}
 .panel h3{margin:1rem 0 .4rem;font-size:1rem;color:var(--muted)}
 .row textarea.tall{min-height:7rem}
+
+/* ---- Leave requests (js/leave.js window, and the HR Leave tab) ---- */
+.lv-back{position:fixed;inset:0;z-index:1000;background:rgba(20,20,24,.55);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:4vh .6rem}
+.lv-back[hidden]{display:none}
+.lv-box{background:var(--card,#fff);color:inherit;width:min(860px,100%);border-radius:10px;padding:1rem 1.1rem;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.lv-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.4rem}.lv-head h2{margin:0}
+.lv-box textarea{width:100%}
+body.lv-open{overflow:hidden}
+.lv-cal td.lv-on{background:#fdecea;font-weight:600}.lv-cal td.lv-pend{background:#fff6dd}
+.lv-pills{display:flex;flex-wrap:wrap;gap:.35rem;margin:.3rem 0}.lv-pills .badge{white-space:nowrap}
+@media print{.lv-back{display:none!important}}

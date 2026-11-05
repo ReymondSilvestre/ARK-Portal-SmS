@@ -24,15 +24,16 @@ var KNOWN = ['schools', 'users', 'auditLogs', 'systemSettings', 'counters', 'cla
   'scanResults', 'modules', 'moduleChunks', 'examPapers', 'examKeys', 'examSubmissions', 'examAttempts', 'classes', 'registry',
   'enrollmentRecords', 'registrarSettings', 'registrarLog', 'payments', 'studentAccounts', 'financeSettings', 'financeLog',
   'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
-  'employees', 'hrSettings', 'hrLog'];
+  'employees', 'hrSettings', 'hrLog', 'leaveRequests'];
 var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'examKeys', 'examPapers', 'moduleChunks', 'modules',
   'examinations', 'answerKeys', 'answerSheets', 'enrollments', 'teacherLinks', 'classCodes', 'students', 'classes',
   'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog',
   'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
-  'employees', 'hrSettings', 'hrLog'];
+  'employees', 'hrSettings', 'hrLog', 'leaveRequests'];
 /* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
 var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr'];
 var MANAGED_ROLES = EMP_ROLES.concat(['student']);
+var LEAVE_ROLES = EMP_ROLES.concat(['admin']);   // everyone who can file a leave request to HR
 var ACTOR_TTL = 300;                    // seconds a signed-in person's profile is remembered between requests (was 20)
 
 /* ============================== helpers ============================== */
@@ -522,6 +523,28 @@ RULES.employees = {
   del: function (S, id, o) { return (S.isHR && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
 };
 RULES.hrSettings = ownRoleSettings('isHR'); RULES.hrLog = ownRoleLog('isHR');
+/* every employee account may READ HR's settings (it holds only the leave types and drop-down lists); only HR writes them */
+RULES.hrSettings.read = function (S, d, id) { return ((S.isHR || (S.live && LEAVE_ROLES.indexOf(S.me.role) >= 0)) && id === S.sid) || S.isSuper; };
+
+/* ---- Leave requests: every employee account (teacher, registrar, finance, custodian, guidance, HR and the IT Admin) files a request to HR.
+   The filer reads / cancels only their own; HR of the same school reads all and decides (never on their own request). ---- */
+function leaveFiler(S) { return S.live && LEAVE_ROLES.indexOf(S.me.role) >= 0; }
+function isYmd(v) { return isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v); }
+RULES.leaveRequests = {
+  read: function (S, d) { return S.isSuper || (S.isHR && S.inMySchool(d)) || (leaveFiler(S) && d.requesterUid === S.uid); },
+  create: function (S, id, n) {
+    return leaveFiler(S) && n.schoolId === S.sid && n.requesterUid === S.uid && n.status === 'Pending' && !n.decidedBy &&
+      isStr(n.leaveType) && n.leaveType.length > 0 && n.leaveType.length <= 60 && isYmd(n.startDate) && isYmd(n.endDate) && n.endDate >= n.startDate &&
+      +n.days > 0 && +n.days <= 366 && (!('reason' in n) || (isStr(n.reason) && n.reason.length <= 1000));
+  },
+  update: function (S, id, o, n) {
+    var df = diffKeys(o, n);
+    if (S.isHR && S.inMySchool(o) && o.requesterUid !== S.uid && n.schoolId === S.sid && subset(df, ['status', 'hrRemarks', 'decidedBy', 'decidedByName', 'decidedAt', 'updatedAt']) &&
+        ['Pending', 'Approved', 'Rejected', 'Cancelled'].indexOf(n.status) >= 0) return true;
+    return leaveFiler(S) && o.requesterUid === S.uid && o.status === 'Pending' && subset(df, ['status', 'updatedAt']) && n.status === 'Cancelled';
+  },
+  del: function (S, id, o) { return S.isSuper || (leaveFiler(S) && o.requesterUid === S.uid && o.status !== 'Approved'); }
+};
 ['examinations', 'answerKeys', 'answerSheets'].forEach(function (c) {
   RULES[c] = {
     read: function (S, d) { return S.isSuper || (S.isStaff && S.mayRead(d)) || (S.isAdmin && S.inMySchool(d)); },
@@ -1021,6 +1044,11 @@ var REC = {
     head: ['School', 'Date', 'Student ID No.', 'Student name', 'Grade level', 'Section', 'Kind of record', 'Concern / reason', 'Action taken', 'Referred to', 'Status', 'Parent / guardian informed', 'Follow-up date', 'Remarks', 'Additional information', 'Recorded by', 'Recorded on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), rDate(d.date), d.studentNo, d.name, d.gradeLevel, d.sectionName, d.category, d.concern, d.action, d.referredTo, d.status, rYN(d.parentNotified), rDate(d.followUp), d.remarks, rExtra(d.extra, rKindFields(cx, 'guidanceSettings', d.schoolId, 'guidance')), d.createdByName, rTs(d.createdAt)];
+    } },
+  hrLeave: { grp: 'hr', src: 'leaveRequests', tab: 'HR - Leave requests', wide: [10, 13],
+    head: ['School', 'Filed on', 'Employee No.', 'Employee name', 'Account type', 'Leave type', 'From', 'To', 'Working days', 'Reason', 'Status', 'HR remarks', 'Decided by', 'Decided on'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), rTs(d.createdAt), d.employeeId, d.requesterName, d.requesterRole === 'admin' ? 'IT Admin' : d.requesterRole, d.leaveType, rDate(d.startDate), rDate(d.endDate), d.days, d.reason, d.status, d.hrRemarks, d.decidedByName, rTs(d.decidedAt)];
     } },
   hrEmp: { grp: 'hr', src: 'employees', tab: 'HR - Employees', wide: [18, 26],
     head: ['School', 'Employee No.', 'Last name', 'First name', 'Middle name', 'Birthdate', 'Age', 'Gender', 'Civil status', 'Position', 'Department', 'Employment type', 'Date hired', 'Status', 'Contact No.', 'Email', 'Address',
