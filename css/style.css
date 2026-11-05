@@ -650,3 +650,17 @@ body.has-side .main>h1{margin:.2rem 0 .8rem}
 .crop-view img{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;pointer-events:none}
 .crop-ring{position:absolute;inset:0;pointer-events:none;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.45);outline:2px dashed #fff;outline-offset:-2px}
 .lv-pop-box input[type=range]{padding:0;min-height:0}
+
+/* ---- header: school logo (square, no background) and school name on ONE line ---- */
+body.has-side{--logo:80px}
+body.has-side .top>.brand.has-school,body.has-side .top>.brand{flex-direction:row;align-items:center;justify-content:center;text-align:left}
+body.has-side .top .school-id{flex-direction:row;align-items:center;justify-content:center;gap:.8rem;text-align:left}
+body.has-side .top .school-logo{height:var(--logo);width:var(--logo);object-fit:contain;background:none;border:0;border-radius:0;padding:0}
+body.has-side .top .school-id .mark.logo img{height:var(--logo);width:var(--logo);object-fit:contain}
+body.has-side .top .brand-school{font-size:1.3rem}
+@media screen and (max-width:760px){
+  body.has-side{--logo:52px}
+  body.has-side .top .school-id{gap:.5rem}
+  body.has-side .top .brand-school{font-size:1rem}
+  body.has-side .top .school-logo,body.has-side .top .school-id .mark.logo img{height:var(--logo);width:var(--logo)}
+}

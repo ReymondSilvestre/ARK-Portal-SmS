@@ -23,7 +23,7 @@ const emptyRow = (n, t) => `<tr><td colspan="${n}">${t}</td></tr>`;
 const options = (list, first) => (first !== undefined ? `<option value="">${esc(first)}</option>` : "") + list.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
 const keep = (id, html) => { const el = $(id); if (!el) return; const v = el.value; el.innerHTML = html; if ([...el.options].some((o) => o.value === v)) el.value = v; };
 const slugName = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "employees";
-const nameOf = (e) => `${e.lastName}, ${e.firstName}${e.middleInitial ? " " + e.middleInitial + "." : ""}`;
+const nameOf = (e) => e.isAdmin ? (e.displayName || "IT Admin") : `${e.lastName}, ${e.firstName}${e.middleInitial ? " " + e.middleInitial + "." : ""}`;
 const pc = (a, b) => (b ? Math.round((a / b) * 1000) / 10 + "%" : "-");
 const bar = (a, b) => `<span class="bar"><i style="width:${b ? Math.min(100, Math.round((a / b) * 100)) : 0}%"></i></span>`;
 
@@ -31,7 +31,7 @@ const bar = (a, b) => `<span class="bar"><i style="width:${b ? Math.min(100, Mat
 const STATUSES = ["Active", "On leave", "Resigned", "Retired", "Terminated"];
 const TYPES = ["Regular", "Probationary", "Contractual", "Part-time", "Substitute"];
 const ACCESS = [["", "No portal account needed"], ["teacher", "Faculty / Teacher"], ["registrar", "Registrar"], ["finance", "Finance"], ["custodian", "Custodian"], ["guidance", "Guidance"], ["hr", "HR"], ["staff", "Other staff (principal, librarian, nurse, guard, driver ...)"]];
-const ACCESS_NAME = Object.fromEntries(ACCESS.filter(([k]) => k).map(([k, v]) => [k, v]));
+const ACCESS_NAME = Object.fromEntries(ACCESS.filter(([k]) => k).map(([k, v]) => [k, v])); ACCESS_NAME.admin = "IT Admin";
 const DEFAULT_LISTS = {
   positions: ["Teacher", "Head Teacher", "Principal", "Registrar", "Cashier / Finance Officer", "Guidance Counselor", "Custodian", "School Nurse", "HR Officer", "IT Administrator", "Librarian", "Security Guard", "Janitor / Utility", "Driver", "Other"],
   departments: ["Elementary", "Junior High School", "Senior High School", "Administration", "Finance", "Registrar's Office", "Guidance", "Clinic", "Maintenance", "Security", "IT"],
@@ -67,7 +67,7 @@ const POSITION_ACCESS = { "Teacher": "teacher", "Head Teacher": "teacher", "Regi
 const accessFor = (pos) => (pos ? POSITION_ACCESS[pos] || "staff" : "");
 
 /* ---------- state ---------- */
-const S = { photo: "", leave: [], leaveTypes: DEFAULT_LEAVE_TYPES.map((t) => ({ ...t })), emps: [], lists: { positions: [...DEFAULT_LISTS.positions], departments: [...DEFAULT_LISTS.departments] }, log: [], logLoaded: false };
+const S = { admins: [], group: "all", photo: "", leave: [], leaveTypes: DEFAULT_LEAVE_TYPES.map((t) => ({ ...t })), emps: [], lists: { positions: [...DEFAULT_LISTS.positions], departments: [...DEFAULT_LISTS.departments] }, log: [], logLoaded: false };
 let editing = null;                      // the employee being edited (null = adding)
 const tsec = (x) => x?.createdAt?.seconds || 0;
 
@@ -75,6 +75,7 @@ async function refresh() {
   await run(async () => {
     // both requests leave together, so this is ONE trip to the server
     const [snap, set, lv] = await Promise.all([getDocs(query(collection(db, "employees"), where("schoolId", "==", SID))), getDoc(doc(db, "hrSettings", SID)).catch(() => null), getDocs(query(collection(db, "leaveRequests"), where("schoolId", "==", SID))).catch(() => null)]);
+    S.admins = await callFn("hrAdminGet").then((r) => (r.admins || []).map((a) => ({ ...a, id: "admin:" + a.uid, isAdmin: true, employeeId: "", accountUid: a.uid, accountRole: "admin", status: "Active" }))).catch(() => S.admins);
     S.emps = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
     if (lv) S.leave = lv.docs.map((d) => ({ id: d.id, ...d.data() }));
     if (set && set.exists()) { const l = set.data().lists || {}; ["positions", "departments"].forEach((k) => { if (Array.isArray(l[k]) && l[k].length) S.lists[k] = l[k]; }); const lt = set.data().leaveTypes; if (Array.isArray(lt) && lt.length) S.leaveTypes = lt; }
@@ -92,7 +93,6 @@ function show(t) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
   if (t === "history" && !S.logLoaded) run(loadHistory);
   if (t === "leave") run(loadLeave);
-  if (t === "admin") run(loadAdmins);
 }
 $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.t); };
 const sec = (t) => document.querySelector(`[data-s="${t}"]`);
@@ -222,33 +222,41 @@ function renderListShell() {
     <label>Status<select id="lStat">${options(STATUSES, "All")}</select></label>
     <label>Portal account<select id="lAcct"><option value="">All</option><option value="yes">Has an account</option><option value="wait">Waiting for IT Admin</option><option value="no">No account</option></select></label>
     <button class="btn" id="lXls" type="button">Download Excel</button></div>
+    <div class="lv-sub noprint" id="lGroup"></div>
     <p class="muted" id="lCount"></p><div class="tablewrap"><table id="lTable"></table></div></div>`;
   ["lq", "lDept", "lPos", "lStat", "lAcct"].forEach((id) => $(id).addEventListener(id === "lq" ? "input" : "change", renderList));
   $("lXls").onclick = downloadExcel;
+  $("lGroup").onclick = (e) => { const b = e.target.closest("button[data-g]"); if (b) { S.group = b.dataset.g; renderList(); } };
   $("lTable").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]"); if (!b) return;
-    const emp = S.emps.find((x) => x.id === b.dataset.id); if (!emp) return;
-    if (b.dataset.act === "edit") { editing = emp; renderForm(); show("add"); scrollTo({ top: 0 }); }
+    const emp = allPeople().find((x) => x.id === b.dataset.id); if (!emp) return;
+    if (b.dataset.act === "edit" && emp.isAdmin) { A.only = S.admins.indexOf(emp); renderAdmins(); show("admin"); scrollTo({ top: 0 }); }
+    else if (b.dataset.act === "edit") { editing = emp; renderForm(); show("add"); scrollTo({ top: 0 }); }
     else if (b.dataset.act === "view") $("lTable").querySelector(`tr[data-more="${CSS.escape(emp.id)}"]`)?.toggleAttribute("hidden");
     else run(() => removeEmployee(emp));
   });
 }
+/** Faculty / teachers: a teacher account, or a position with "teacher" in it. Everybody else (registrar, finance, IT Admin, guards ...) is "other employees". */
+const isFaculty = (e) => !e.isAdmin && (e.accountRole === "teacher" || e.accessType === "teacher" || /teacher/i.test(e.position || ""));
+const allPeople = () => [...S.emps, ...S.admins].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
 const filtered = () => {
   const q = ($("lq")?.value || "").trim().toLowerCase(), d = $("lDept")?.value || "", p = $("lPos")?.value || "", st = $("lStat")?.value || "", ac = $("lAcct")?.value || "";
-  return S.emps.filter((e) => (!q || [e.employeeId, nameOf(e), e.position, e.department].join(" ").toLowerCase().includes(q)) && (!d || e.department === d) && (!p || e.position === p) && (!st || (e.status || "Active") === st) &&
+  return allPeople().filter((e) => (S.group === "all" || (S.group === "faculty") === isFaculty(e)) && (!q || [e.employeeId, nameOf(e), e.position, e.department].join(" ").toLowerCase().includes(q)) && (!d || e.department === d) && (!p || e.position === p) && (!st || (e.status || "Active") === st) &&
     (!ac || (ac === "yes" ? hasAccount(e) : ac === "wait" ? waiting(e) : !hasAccount(e) && !waiting(e))));
 };
 function renderList() {
-  keep("lDept", options([...new Set([...S.lists.departments, ...S.emps.map((e) => e.department).filter(Boolean)])], "All"));
-  keep("lPos", options([...new Set([...S.lists.positions, ...S.emps.map((e) => e.position).filter(Boolean)])], "All"));
-  const rows = filtered();
-  $("lCount").textContent = `${rows.length} of ${S.emps.length} employees`;
-  $("lTable").innerHTML = hdr(["Employee No.", "Name", "Position", "Department", "Status", "Portal account", ""]) + (rows.map((e) => `<tr><td>${esc(e.employeeId)}</td><td>${e.photo ? `<img class="emp-photo" alt="" src="${esc(e.photo)}">` : ""}${esc(nameOf(e))}</td><td>${esc(e.position || "-")}</td><td>${esc(e.department || "-")}</td><td>${statusBadge(e.status, e)}</td><td>${acctBadge(e)}</td>
+  keep("lDept", options([...new Set([...S.lists.departments, ...allPeople().map((e) => e.department).filter(Boolean)])], "All"));
+  keep("lPos", options([...new Set([...S.lists.positions, ...allPeople().map((e) => e.position).filter(Boolean)])], "All"));
+  const rows = filtered(), P = allPeople(), nF = P.filter(isFaculty).length;
+  $("lGroup").innerHTML = [["all", `All employees (${P.length})`], ["faculty", `Faculty / Teachers (${nF})`], ["other", `Other employees (${P.length - nF})`]].map(([k, l]) => `<button class="btn${S.group === k ? " on" : ""}" type="button" data-g="${k}">${l}</button>`).join("");
+  $("lCount").textContent = `${rows.length} of ${P.length} employees`;
+  $("lTable").innerHTML = hdr(["Employee No.", "Name", "Position", "Department", "Status", "Portal account", ""]) + (rows.map((e) => `<tr><td>${esc(e.employeeId || "-")}</td><td>${e.photo ? `<img class="emp-photo" alt="" src="${esc(e.photo)}">` : ""}${esc(nameOf(e))}</td><td>${esc(e.position || "-")}</td><td>${esc(e.department || "-")}</td><td>${statusBadge(e.status, e)}</td><td>${acctBadge(e)}</td>
     <td class="actions"><button class="btn small" data-act="view" data-id="${esc(e.id)}">Details</button><button class="btn small" data-act="edit" data-id="${esc(e.id)}">Edit</button>
-    <button class="btn small danger" data-act="del" data-id="${esc(e.id)}"${e.accountUid === user.uid ? ' disabled title="You cannot delete your own record."' : ""}>Delete</button></td></tr>
+    ${e.isAdmin ? "" : `<button class="btn small danger" data-act="del" data-id="${esc(e.id)}"${e.accountUid === user.uid ? ' disabled title="You cannot delete your own record."' : ""}>Delete</button>`}</td></tr>
     <tr data-more="${esc(e.id)}" hidden><td colspan="7">${detailHtml(e)}</td></tr>`).join("") || emptyRow(7, "No employees found."));
 }
 function detailHtml(e) {
+  if (e.isAdmin) return `<div class="infogrid">${[["Photo", e.photo ? `<img class="emp-photo" style="width:80px;height:80px" alt="" src="${esc(e.photo)}">` : "-", true], ["Contact No.", e.contact], ["Sign-in email", e.email], ["Account", "IT Admin (managed by the Super Admin)"]].map(([k, v, raw]) => `<div><span>${k}</span><b>${raw ? v : esc(v || "-")}</b></div>`).join("")}</div>`;
   const items = [["Photo", e.photo ? `<img class="emp-photo" style="width:80px;height:80px" alt="" src="${esc(e.photo)}">` : "-", true], ["Birthday", `${dateText(e.birthday)}${ageOf(e.birthday) !== "" ? " (age " + ageOf(e.birthday) + ")" : ""}`], ["Gender", e.gender], ["Civil status", e.civilStatus], ["Employment type", e.employmentType], ["Date hired", dateText(e.dateHired)], ["Contact No.", e.contact], ["Email", e.email], ["Address", e.address],
     ["Emergency contact", [e.emergencyName, e.emergencyContact].filter(Boolean).join(" - ")], ["SSS No.", e.sss], ["PhilHealth No.", e.philhealth], ["Pag-IBIG No.", e.pagibig], ["TIN", e.tin], ["PRC license No.", e.prc]];
   return `<div class="infogrid">${items.map(([k, v, raw]) => `<div><span>${k}</span><b>${raw ? v : esc(v || "-")}</b></div>`).join("")}</div>`;
@@ -284,15 +292,12 @@ function renderHistory() {
 }
 
 /* ---------- the IT Admin: HR keeps the IT Admin's information too (name, position, department, contact, 2x2 photo) ---------- */
-const A = { list: [], photo: "", loaded: false };
-async function loadAdmins() {
-  const r = await callFn("hrAdminGet"); A.list = r.admins || []; A.loaded = true; renderAdmins();
-}
+const A = { only: 0, get list() { return S.admins; } };
 function renderAdmins() {
   const posList = [...new Set([...S.lists.positions, ...A.list.map((a) => a.position).filter(Boolean)])], depList = [...new Set([...S.lists.departments, ...A.list.map((a) => a.department).filter(Boolean)])];
-  sec("admin").innerHTML = `<div class="panel"><h2>IT Admin</h2><p class="muted">The IT Admin is an employee too. Keep the name, position, department, contact number and 2x2 photo here. They show in the IT Admin's side panel.
-    The sign-in email and the password stay with the Super Admin and the IT Admin.</p></div>` +
-    (A.list.map((a, i) => `<div class="panel"><form data-adm="${i}" novalidate><h3 style="margin-top:0;color:var(--ink)">${esc(a.displayName || "IT Admin")}</h3>
+  sec("admin").innerHTML = `<div class="panel"><h2>Edit employee: IT Admin</h2><p class="muted">The IT Admin is an employee too. Keep the name, position, department, contact number and 2x2 photo here. They show in the IT Admin's side panel.
+    The sign-in email and the password stay with the Super Admin and the IT Admin.</p><button class="btn" type="button" data-back>&larr; Back to Employees</button></div>` +
+    (A.list.map((a, i) => i !== A.only ? "" : `<div class="panel"><form data-adm="${i}" novalidate><h3 style="margin-top:0;color:var(--ink)">${esc(a.displayName || "IT Admin")}</h3>
       <div class="photo-box"><img class="pv" alt="2x2 photo preview" data-pv${a.photo ? ` src="${esc(a.photo)}"` : " hidden"}><div><label>2x2 picture <small>(JPG or PNG; it is cropped to a square)</small><input type="file" accept="image/*" data-file></label>
         <button class="btn small" type="button" data-photodel${a.photo ? "" : " hidden"}>Remove photo</button><p class="muted" data-note></p></div></div>
       <div class="row"><label>Full name<input data-k="displayName" maxlength="100" value="${esc(a.displayName)}" autocomplete="off"></label>
@@ -310,6 +315,7 @@ sec("admin").addEventListener("change", (e) => {
   run(async () => { const d = await squarePhoto(file); if (!d) { f.value = ""; return; } a.photo = d; const pv = form.querySelector("[data-pv]"); pv.src = a.photo; pv.hidden = false; form.querySelector("[data-photodel]").hidden = false; form.querySelector("[data-note]").textContent = "New photo ready. Press Save to keep it."; });
 });
 sec("admin").addEventListener("click", (e) => {
+  if (e.target.closest("[data-back]")) return show("list");
   const d = e.target.closest("[data-photodel]"); if (!d) return;
   const form = d.closest("form"), a = A.list[+form.dataset.adm]; a.photo = "";
   const pv = form.querySelector("[data-pv]"); pv.removeAttribute("src"); pv.hidden = true; d.hidden = true; form.querySelector("[data-file]").value = ""; form.querySelector("[data-note]").textContent = "The photo will be removed when you save.";
@@ -320,7 +326,7 @@ sec("admin").addEventListener("submit", (e) => {
   if (v.displayName.length < 3) return flash("Enter the IT Admin's full name.");
   const btn = form.querySelector('button[type="submit"]'); btn.disabled = true;
   run(async () => {
-    try { await callFn("hrAdminSave", { uid: a.uid, ...v, photo: a.photo || "" }); Object.assign(a, v); S.logLoaded = false; renderAdmins(); flash("The IT Admin information was saved. The IT Admin sees it at the next page load.", true); }
+    try { await callFn("hrAdminSave", { uid: a.uid, ...v, photo: a.photo || "" }); Object.assign(a, v); S.logLoaded = false; renderList(); show("list"); flash("The IT Admin information was saved. The IT Admin sees it at the next page load.", true); }
     finally { btn.disabled = false; }
   });
 });
