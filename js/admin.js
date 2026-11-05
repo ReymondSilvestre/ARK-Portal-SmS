@@ -142,7 +142,9 @@ $("newT").addEventListener("submit", async (e) => {
   } catch (err) {
     const m = String((err && err.message) || "");
     flash(/unknown account type/i.test(m)
-      ? "The server (Google Apps Script) is still the OLD version and does not know the HR account type. Open Apps Script, paste the newest apps-script/Code.gs, then Deploy > Manage deployments > pencil > Version: New version > Deploy. Then reload this page and try again."
+      ? "Server said: \"" + m + "\". " + (/type:\s*\S+/i.test(m)
+          ? "The server is the NEW version but received an unexpected account type (see the word after the colon)."
+          : "The server has no version stamp, so the site is calling an OLD deployment. Open the Web app URL in config.js in a browser: it must show 'Version: HR-2'. If it does not, the URL points to an old deployment.")
       : friendlyError(err));
   }
   finally { $("addBtn").disabled = false; }

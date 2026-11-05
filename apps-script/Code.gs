@@ -1230,7 +1230,8 @@ function doPost(e) {
   catch (err) { _tabs = {}; out = { ok: false, error: { code: err.code || 'internal', message: err.code ? err.message : 'Something went wrong. Please try again.' } }; if (!err.code) console.error(err && err.stack || err); }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
-function doGet() { return ContentService.createTextOutput('ARK Exam Portal API is running.'); }
+var CODE_VERSION = 'HR-2';
+function doGet() { return ContentService.createTextOutput('ARK Exam Portal API is running. Version: ' + CODE_VERSION); }
 
 /* ============================== spreadsheet menu: first-time setup ============================== */
 function onOpen() {
