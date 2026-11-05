@@ -18,7 +18,7 @@ export function workingDays(a, b) {
   for (; d <= e; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) n++; }
   return n;
 }
-export const roleName = (r) => ({ admin: "IT Admin", teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR" }[r] || r || "");
+export const roleName = (r) => ({ admin: "IT Admin", staff: "Staff", teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR" }[r] || r || "");
 export async function loadLeaveTypes(sid) {
   try { const s = await getDoc(doc(db, "hrSettings", sid)); const t = s.exists() && s.data().leaveTypes; if (Array.isArray(t) && t.length) return t; } catch { }
   return DEFAULT_LEAVE_TYPES;
@@ -26,29 +26,32 @@ export async function loadLeaveTypes(sid) {
 
 /** A message that pops up in the CENTER of the screen (instead of a banner at the top or bottom of the page).
  *  buttons: [{ label, value, primary }]; input: { label, required } adds a text box. Resolves { value, text } (value null when closed with Esc / outside). */
-export function showPopup({ title = "", html = "", ok, buttons, input } = {}) {
+export function showPopup({ title = "", html = "", ok, buttons, input, validate, onOpen } = {}) {
   return new Promise((resolve) => {
     const el = document.createElement("div"); el.className = "lv-pop"; el.setAttribute("role", "alertdialog"); el.setAttribute("aria-modal", "true");
     const bs = buttons && buttons.length ? buttons : [{ label: "OK", value: "ok", primary: true }];
     el.innerHTML = `<div class="lv-pop-box${ok === true ? " ok" : ok === false ? " err" : ""}"><h3>${esc(title)}</h3><div class="lv-pop-body">${html}</div>
-      ${input ? `<label>${esc(input.label || "")}<textarea class="tall" maxlength="500" id="lvPopText" placeholder="${esc(input.placeholder || "")}"></textarea></label><p class="lv-pop-err" id="lvPopErr" hidden></p>` : ""}
+      <p class="lv-pop-err" id="lvPopErr2" hidden></p>${input ? `<label>${esc(input.label || "")}<textarea class="tall" maxlength="500" id="lvPopText" placeholder="${esc(input.placeholder || "")}"></textarea></label><p class="lv-pop-err" id="lvPopErr" hidden></p>` : ""}
       <div class="lv-pop-btns">${bs.map((b, i) => `<button type="button" class="btn${b.primary ? " primary" : ""}${b.danger ? " danger" : ""}" data-i="${i}">${esc(b.label)}</button>`).join("")}</div></div>`;
     document.body.append(el);
-    const done = (value) => { el.remove(); removeEventListener("keydown", key); resolve({ value, text: (el.querySelector("#lvPopText") || {}).value || "" }); };
+    const fieldsOf = () => Object.fromEntries([...el.querySelectorAll("[data-pf]")].map((f) => [f.dataset.pf, f.value]));
+    const done = (value) => { const fields = fieldsOf(), text = (el.querySelector("#lvPopText") || {}).value || ""; el.remove(); removeEventListener("keydown", key); resolve({ value, text, fields }); };
     const key = (e) => { if (e.key === "Escape") { e.stopPropagation(); done(null); } };
     addEventListener("keydown", key);
     el.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-i]"); if (!b) return;
       const def = bs[+b.dataset.i], t = el.querySelector("#lvPopText");
       if (input && input.required && def.primary && !t.value.trim()) { const er = el.querySelector("#lvPopErr"); er.textContent = input.required === true ? "Please write something first." : input.required; er.hidden = false; t.focus(); return; }
+      if (validate && def.primary) { const msg = validate(fieldsOf()), er2 = el.querySelector("#lvPopErr2"); if (msg) { er2.textContent = msg; er2.hidden = false; return; } }
       done(def.value);
     });
-    (el.querySelector("#lvPopText") || el.querySelector(".btn.primary") || el.querySelector(".btn")).focus();
+    if (onOpen) onOpen(el);
+    (el.querySelector("#lvPopText") || el.querySelector("[data-pf]") || el.querySelector(".btn.primary") || el.querySelector(".btn")).focus();
   });
 }
 export const errText = (e) => friendlyError(e) + (e && e.code === "permission-denied" ? " If this keeps happening, make sure the newest Code.gs is deployed in Apps Script (Deploy > Manage deployments > pencil > New version > Deploy)." : "");
 
-const ROLES = ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "admin"];
+const ROLES = ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "staff", "admin"];
 const m = await requireRole(ROLES).catch(() => null);
 if (m) start(m);
 
@@ -57,6 +60,13 @@ function start({ user, profile }) {
   const SEEN = "ark.leaveSeen." + UID;
   let mine = [], types = DEFAULT_LEAVE_TYPES, open = false;
 
+  /* ---- the 2x2 photo (kept by HR) and the position, beside the person's name ---- */
+  const who = document.getElementById("who");
+  if (who && who.parentNode && !document.getElementById("whoPhoto")) {
+    if (profile.photo) { const im = Object.assign(document.createElement("img"), { src: profile.photo, alt: "", id: "whoPhoto", className: "who-photo" }); who.parentNode.insertBefore(im, who); }
+    const pos = [profile.position, profile.department].filter(Boolean).join(", ") || (profile.role === "admin" ? "IT Admin" : "");
+    if (pos) { const sm = Object.assign(document.createElement("small"), { className: "who-pos", id: "whoPos", textContent: pos }); who.after(sm); }
+  }
   /* ---- the button in the top bar ---- */
   const out = document.getElementById("out"); if (!out) return;
   const btn = document.createElement("button"); btn.className = out.className.replace("danger", "").trim() || "btn small"; btn.type = "button"; btn.id = "leaveBtn"; btn.textContent = "Leave request";

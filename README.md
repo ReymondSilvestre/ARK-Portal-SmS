@@ -65,6 +65,7 @@ Apps Script > **Deploy > Manage deployments > pencil > Version: New version > De
 4. The login is linked to the HR record. HR sees **Has an account**; removing the account keeps the employee in the HR records. An employee who has an account cannot be deleted from HR until the account is removed.
 
 ## Leave requests
+(HR can file leave for employees without an account, and approve its own leave. Every position can have an account: use account type **Other staff** for positions without a special page.)
 Every employee account (teacher, registrar, finance, custodian, guidance, HR and the IT Admin) has a **Leave request** button in the top bar. Requests go to **HR > Leave**, where HR approves or rejects them and monitors the days used per leave type (set under HR > Settings > Leave types). HR cannot decide its own request.
 
 ## Sign in

@@ -31,7 +31,7 @@ var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'exa
   'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
   'employees', 'hrSettings', 'hrLog', 'leaveRequests'];
 /* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
-var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr'];
+var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr', 'staff'];   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
 var MANAGED_ROLES = EMP_ROLES.concat(['student']);
 var LEAVE_ROLES = EMP_ROLES.concat(['admin']);   // everyone who can file a leave request to HR
 var ACTOR_TTL = 300;                    // seconds a signed-in person's profile is remembered between requests (was 20)
@@ -516,10 +516,11 @@ RULES.guidanceSettings = ownRoleSettings('isGuidance'); RULES.guidanceLog = ownR
    The link to a login (accountUid / accountRole) is written by the server only, never by the browser. ---- */
 var ACCT_FIELDS = ['accountUid', 'accountRole', 'accountCreatedAt'];
 function sameAcct(a, b) { return ACCT_FIELDS.every(function (k) { return jeq(a[k], b[k]); }); }
+function photoOk(n) { return !('photo' in n) || n.photo === '' || (isStr(n.photo) && n.photo.length <= 19000 && n.photo.indexOf('data:image/') === 0); }
 RULES.employees = {
   read: function (S, d) { return (S.isHR && S.inMySchool(d)) || S.isSuper; },
-  create: function (S, id, n) { return S.isHR && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId); },
-  update: function (S, id, o, n) { return S.isHR && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n); },
+  create: function (S, id, n) { return S.isHR && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId) && photoOk(n); },
+  update: function (S, id, o, n) { return S.isHR && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n) && photoOk(n); },
   del: function (S, id, o) { return (S.isHR && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
 };
 RULES.hrSettings = ownRoleSettings('isHR'); RULES.hrLog = ownRoleLog('isHR');
@@ -533,17 +534,20 @@ function isYmd(v) { return isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v); }
 RULES.leaveRequests = {
   read: function (S, d) { return S.isSuper || (S.isHR && S.inMySchool(d)) || (leaveFiler(S) && d.requesterUid === S.uid); },
   create: function (S, id, n) {
-    return leaveFiler(S) && n.schoolId === S.sid && n.requesterUid === S.uid && n.status === 'Pending' && !n.decidedBy &&
-      isStr(n.leaveType) && n.leaveType.length > 0 && n.leaveType.length <= 60 && isYmd(n.startDate) && isYmd(n.endDate) && n.endDate >= n.startDate &&
-      +n.days > 0 && +n.days <= 366 && (!('reason' in n) || (isStr(n.reason) && n.reason.length <= 1000));
+    var okBody = isStr(n.leaveType) && n.leaveType.length > 0 && n.leaveType.length <= 60 && isYmd(n.startDate) && isYmd(n.endDate) && n.endDate >= n.startDate &&
+      +n.days > 0 && +n.days <= 366 && (!('reason' in n) || (isStr(n.reason) && n.reason.length <= 1000)) && n.schoolId === S.sid;
+    if (!okBody) return false;
+    if (leaveFiler(S) && n.requesterUid === S.uid && n.status === 'Pending' && !n.decidedBy) return true;           // my own request
+    // HR files a leave for an employee (also one without an account); it can be approved at once
+    return S.isHR && n.filedBy === S.uid && isStr(n.requesterName) && (n.status === 'Pending' || (n.status === 'Approved' && n.decidedBy === S.uid));
   },
   update: function (S, id, o, n) {
     var df = diffKeys(o, n);
-    if (S.isHR && S.inMySchool(o) && o.requesterUid !== S.uid && n.schoolId === S.sid && subset(df, ['status', 'hrRemarks', 'decidedBy', 'decidedByName', 'decidedAt', 'updatedAt']) &&
+    if (S.isHR && S.inMySchool(o) && n.schoolId === S.sid && subset(df, ['status', 'hrRemarks', 'decidedBy', 'decidedByName', 'decidedAt', 'updatedAt']) &&
         ['Pending', 'Approved', 'Rejected', 'Cancelled'].indexOf(n.status) >= 0) return true;
     return leaveFiler(S) && o.requesterUid === S.uid && o.status === 'Pending' && subset(df, ['status', 'updatedAt']) && n.status === 'Cancelled';
   },
-  del: function (S, id, o) { return S.isSuper || (leaveFiler(S) && o.requesterUid === S.uid && o.status !== 'Approved'); }
+  del: function (S, id, o) { return S.isSuper || (S.isHR && S.inMySchool(o)) || (leaveFiler(S) && o.requesterUid === S.uid && o.status !== 'Approved'); }
 };
 ['examinations', 'answerKeys', 'answerSheets'].forEach(function (c) {
   RULES[c] = {
@@ -598,6 +602,7 @@ function listDocs(S, p) {
     var d = unpack(cellJson(t, hits[h].i));
     if (!wheres.every(function (w) { return matchWhere(d, w); })) continue;
     if (!rules.read(S, d, ids[hits[h].i], 'list')) continue;
+    if (p.coll === 'users' && d.photo && ids[hits[h].i] !== S.uid) delete d.photo;   // keeps account lists small
     out.push({ id: ids[hits[h].i], data: d });
   }
   (p.orders || []).slice().reverse().forEach(function (o) {
@@ -636,7 +641,14 @@ function applyWrite(S, op) {
   if (!existing) { if (!rules.create(S, id, data)) deny(); }
   else if (!rules.update(S, id, existing, data)) deny();
   putDoc(coll, id, data);
+  if (coll === 'employees' && data.accountUid) syncEmpToUser(S, data);
   if (coll === 'users' || coll === 'schools') S.touched.push(coll === 'users' ? id : '*');
+}
+/** The photo / position / department HR keeps are copied onto the person's login, so their own page can show them beside their name. */
+function syncEmpToUser(S, e) {
+  var u = getDoc('users', e.accountUid); if (!u || u.schoolId !== e.schoolId) return;
+  ['photo', 'position', 'department'].forEach(function (k) { if (e[k]) u[k] = e[k]; else delete u[k]; });
+  putDoc('users', e.accountUid, u); S.touched.push(e.accountUid);
 }
 function commit(actor, ops) {
   var S = makeS(actor); S.touched = [];
@@ -759,6 +771,7 @@ function actCreateAccount(actor, p) {
     keys = [staffKey(S.sid, emp)]; if (real) keys.push(real);
     doc = { uid: '', role: role, displayName: fullName(empDoc), lastName: empDoc.lastName, firstName: empDoc.firstName, middleInitial: String(empDoc.middleInitial || '').slice(0, 1),
       email: real || String(p.email || ''), employeeId: emp, birthday: empDoc.birthday, schoolId: S.sid, schoolName: sc.name || '', status: 'active', mustChangePassword: true, createdAt: { __ts: now }, createdBy: actor.uid };
+    ['photo', 'position', 'department'].forEach(function (k) { if (empDoc[k]) doc[k] = empDoc[k]; });
     if (real) doc.hasRealEmail = true;
   } else if (role === 'student') {
     if (!S.isStaff) deny();
@@ -869,6 +882,9 @@ function actDeleteUser(actor, p) {
   var t = getDoc('users', uid); if (!t) { var l0 = LockService.getScriptLock(); l0.waitLock(20000); try { tDel(T(AUTH_TAB), uid); flushAll(); } finally { l0.releaseLock(); } return { ok: true }; }
   if (t.role === 'superadmin') fail('permission-denied', 'That account cannot be removed here.');
   if (!canManage(actor, t)) fail('permission-denied', 'You cannot remove that account.');
+  return deleteUserCore(actor, uid, t);
+}
+function deleteUserCore(actor, uid, t) {
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     if (t.role === 'teacher') {
@@ -890,6 +906,28 @@ function actDeleteUser(actor, p) {
     flushAll();
     if (unlinked) mirrorOps([{ op: 'set', coll: 'employees', id: unlinked }]);
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  return { ok: true };
+}
+/** HR: remove an employee from the HR records. The login account (if any) is removed too, and so are the leave requests of that person. */
+function actHrDeleteEmployee(actor, p) {
+  var S = makeS(actor); if (!S.isHR) fail('permission-denied', 'Only HR can remove an employee.');
+  var key = String(p.key || ''), e = getDoc('employees', key);
+  if (!e || e.schoolId !== S.sid) fail('not-found', 'That employee was not found.');
+  if (e.accountUid) {
+    if (e.accountUid === actor.uid) fail('failed-precondition', 'You cannot remove your own account. Ask another HR account to do it.');
+    var u = getDoc('users', e.accountUid);
+    if (u) { if (u.schoolId !== S.sid || EMP_ROLES.indexOf(u.role) < 0) deny(); deleteUserCore(actor, e.accountUid, u); }
+    else { var l0 = LockService.getScriptLock(); l0.waitLock(20000); try { tDel(T(AUTH_TAB), e.accountUid); flushAll(); } finally { l0.releaseLock(); } }
+  }
+  var ops = [{ op: 'delete', coll: 'employees', id: key }], lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var lv = scan('leaveRequests', { schoolId: [S.sid] }), lids = colOf(lv.t, 0);
+    lv.hits.forEach(function (h) { var d = unpack(cellJson(lv.t, h.i)); if ((e.accountUid && d.requesterUid === e.accountUid) || (d.employeeId && d.employeeId === e.employeeId)) { delDoc('leaveRequests', lids[h.i]); ops.push({ op: 'delete', coll: 'leaveRequests', id: lids[h.i] }); } });
+    delDoc('employees', key);
+    putDoc('hrLog', newId(), { schoolId: S.sid, byUid: actor.uid, byName: actor.me.displayName || '', action: e.accountUid ? 'Deleted (account removed too)' : 'Deleted', targetName: fullName(e), targetNo: e.employeeId, createdAt: { __ts: nowMs() } });
+    flushAll();
+  } catch (err) { rollback(); throw err; } finally { lock.releaseLock(); }
+  mirrorOps(ops);
   return { ok: true };
 }
 /* Registrar: delete the login account of one student of the registrar's own school (even if it is already created).
@@ -1231,6 +1269,7 @@ function runCall(actor, c) {
         case 'allocIds': return actAllocIds(actor, c.data || {});
         case 'hrCandidates': return actHrCandidates(actor);
         case 'hrSyncAccounts': return actHrSyncAccounts(actor);
+        case 'hrDeleteEmployee': return actHrDeleteEmployee(actor, c.data || {});
       }
   }
   fail('invalid-argument', 'Unknown request.');

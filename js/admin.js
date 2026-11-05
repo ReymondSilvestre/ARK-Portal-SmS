@@ -31,8 +31,8 @@ $("dlgCopy").onclick = () => navigator.clipboard?.writeText($("dlgPw").textConte
 const ask = (text) => confirm(text);
 const lastOf = (t) => t.lastName || String(t.displayName || "").split(",")[0];
 const pwOf = (t) => defaultStudentPassword({ birthday: t.birthday, lastName: lastOf(t) });
-const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR" };
-const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", hr: "HR", teacher: "faculty / teacher" };
+const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR", staff: "Other staff" };
+const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", hr: "HR", staff: "other staff", teacher: "faculty / teacher" };
 const userOf = (t) => (t.role === "student" ? t.studentId : t.employeeId);
 
 /* ---------- connection indicator ---------- */
@@ -59,7 +59,7 @@ const logAudit = (action, targetUid, details = {}) =>
 /* ---------- accounts of this school ---------- */
 let users = [], teachers = [];
 async function loadTeachers() {
-  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "student"])));
+  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "staff", "student"])));
   users = snap.docs.map((d) => d.data()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
   teachers = users.filter((u) => u.role === "teacher");
   renderTeachers();

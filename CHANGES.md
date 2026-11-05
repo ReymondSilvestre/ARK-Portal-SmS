@@ -1,5 +1,18 @@
 # Revision notes
 
+## NEW (update 2): loading animation, HR own leave, leave for people without accounts, any position can have an account, HR delete with account, 2x2 photo
+**To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**; upload the whole site folder to GitHub again (new files: `staff.html`, `js/staff.js`). `js/config.js` already holds your Web app URL.
+
+* **Loading / saving animation (all pages):** a moving bar at the top while anything loads, and a centered "Saving..." card with a spinner while something is saved or an account action runs (so nobody presses a button twice). Requests shorter than a quarter of a second show nothing.
+* **HR can approve / reject its own leave** (no second HR account needed).
+* **HR files a leave for any employee, also one without an account** (Leave > Leave request > *File a leave for an employee*). It can be saved as Approved at once or as Pending. HR can also delete a leave request.
+* **Leave page has three buttons:** *Leave request*, *On leave and coming up*, *Leave monitoring*.
+* **Every position can have an account:** new account type **Other staff** (principal, librarian, nurse, guard, driver, janitor ...). HR picks the account needed in the employee form (it is suggested from the Position); the IT Admin creates it as before. These people sign in to `staff.html`, see their photo and details, and send leave requests.
+* **HR can delete an employee even with an active account:** the portal account is deleted at the same time (the confirmation says so; for a teacher it also deletes their students, sections and exams), together with the person's leave requests. HR cannot delete its own record.
+* **2x2 photo:** HR > Add / Edit employee > *Photo*. The picture is cropped square and shrunk automatically. It shows in the employee list and details, and **beside the person's name and position** at the top of their own page.
+
+---
+
 ## NEW: Leave requests (all employee accounts) and HR leave monitoring
 **To apply:** (1) paste the new `apps-script/Code.gs` into Apps Script, then **Deploy > Manage deployments > pencil > New version > Deploy**; (2) upload the whole site folder to GitHub again (new file: `js/leave.js`; changed: `hr.html`, `js/hr.js`, `css/style.css` and the IT Admin, teacher, registrar, finance, custodian and guidance pages). No new spreadsheet tab setup is needed: the `leaveRequests` tab is created on first use, and the HR readable sheet gets a new tab **HR - Leave requests** (run menu 5 once if you want the tab to appear before the first request).
 

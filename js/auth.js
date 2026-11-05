@@ -11,11 +11,11 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const homeFor = (role) =>
-  role === "superadmin" ? "superadmin.html" : role === "admin" ? "admin.html" : role === "registrar" ? "registrar.html" : role === "finance" ? "finance.html" : role === "custodian" ? "custodian.html" : role === "guidance" ? "guidance.html" : role === "hr" ? "hr.html" : role === "student" ? "student.html" : "teacher.html";
+  role === "superadmin" ? "superadmin.html" : role === "admin" ? "admin.html" : role === "registrar" ? "registrar.html" : role === "finance" ? "finance.html" : role === "custodian" ? "custodian.html" : role === "guidance" ? "guidance.html" : role === "hr" ? "hr.html" : role === "staff" ? "staff.html" : role === "student" ? "student.html" : "teacher.html";
 
 /* ---------- logins ----------
    Students: Exam ID No.                      (no school code)
-   Employees (teacher, registrar, finance, custodian, guidance, HR): School code + Employee No.
+   Employees (teacher, registrar, finance, custodian, guidance, HR, any other staff): School code + Employee No.
    IT admins / Super Admin: a real email address.
    An optional REAL email on a teacher / student account also works as a username and receives reset links. */
 export const STUDENT_DOMAIN = "student.ark-exam.app";   // only used to show a placeholder address on accounts without a real email

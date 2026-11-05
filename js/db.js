@@ -51,15 +51,46 @@ async function post(obj) {
   } catch { throw err({ code: "auth/network-request-failed", message: "No connection. Check your internet and try again." }); }
   try { return JSON.parse(text); } catch { throw err({ code: "unavailable", message: "The server is busy. Please try again in a moment." }); }
 }
+
+/* ---------- loading / saving animation ----------
+   A thin moving bar at the top shows while anything is loading. While something is being SAVED (or an account action runs) a centered
+   "Saving..." card with a spinner also appears, so nobody presses the button twice. Short requests (under 0.25 s) show nothing at all. */
+const BUSY = { read: 0, write: 0, tRead: null, tWrite: null, el: null };
+function busyUI() {
+  if (BUSY.el || typeof document === "undefined" || !document.body) return BUSY.el;
+  const el = document.createElement("div"); el.id = "ark-busy"; el.setAttribute("aria-live", "polite");
+  el.innerHTML = '<div class="ab-bar"></div><div class="ab-chip" hidden><i class="ab-spin"></i><span>Loading...</span></div><div class="ab-veil" hidden><div class="ab-card"><i class="ab-spin big"></i><b>Saving...</b><small>Please wait, do not close this page.</small></div></div>';
+  document.body.append(el); return (BUSY.el = el);
+}
+function busyShow() {
+  const el = busyUI(); if (!el) return;
+  const bar = el.querySelector(".ab-bar"), chip = el.querySelector(".ab-chip"), veil = el.querySelector(".ab-veil");
+  bar.classList.toggle("on", BUSY.read + BUSY.write > 0);
+  chip.hidden = !(BUSY.read > 0 && BUSY.write === 0 && BUSY.chipOn);
+  veil.hidden = !(BUSY.write > 0 && BUSY.veilOn);
+}
+function busyStart(kind) {
+  if (kind === "write") { BUSY.write++; if (!BUSY.tWrite) BUSY.tWrite = setTimeout(() => { BUSY.veilOn = true; busyShow(); }, 250); }
+  else { BUSY.read++; if (!BUSY.tRead) BUSY.tRead = setTimeout(() => { BUSY.chipOn = true; busyShow(); }, 400); }
+  busyShow();
+}
+function busyEnd(kind) {
+  if (kind === "write") { BUSY.write = Math.max(0, BUSY.write - 1); if (!BUSY.write) { clearTimeout(BUSY.tWrite); BUSY.tWrite = null; BUSY.veilOn = false; } }
+  else { BUSY.read = Math.max(0, BUSY.read - 1); if (!BUSY.read) { clearTimeout(BUSY.tRead); BUSY.tRead = null; BUSY.chipOn = false; } }
+  busyShow();
+}
+const busyKind = (c) => (c && (c.k === "batch" || c.k === "fn") ? "write" : "read");
+const track = (kind, p) => { busyStart(kind); return p.finally(() => busyEnd(kind)); };
+
 /** Calls that do not need a sign-in (login, password reset). */
 export async function rpc(action, payload = {}) {
-  const r = await post({ action, ...payload });
+  const r = await track("read", post({ action, ...payload }));
   if (!r.ok) throw err(r.error);
   return r.data;
 }
 /* Calls made in the same moment are sent together in ONE request (fewer round trips = faster pages). */
 let queue = [], timer = null;
-const enqueue = (call) => new Promise((resolve, reject) => { queue.push({ call, resolve, reject }); if (!timer) timer = setTimeout(flush, 6); });
+const enqueue = (call) => track(busyKind(call), new Promise((resolve, reject) => { queue.push({ call, resolve, reject }); if (!timer) timer = setTimeout(flush, 6); }));
 async function flush() {
   const batch = queue; queue = []; timer = null;
   const s = getSession();
