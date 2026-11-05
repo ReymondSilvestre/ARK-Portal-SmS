@@ -4,20 +4,28 @@
 <title>HR - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css">
 <!-- SheetJS: used only to download lists as Excel files -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-</head><body><div class="wrap wide">
-<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span><span id="who">HR</span></div>
-<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+</head><body class="has-side"><div class="shell">
+<aside class="side" id="sidePanel" aria-label="My account">
+  <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+    <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><span id="who" hidden></span></div>
+  <nav id="sideNav" aria-label="Pages"></nav>
+  <div class="who"><button class="btn" id="out" type="button">Sign out</button></div>
+</aside>
+<main class="main">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span></div>
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="tabs noprint" id="tabs">
-<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="add">Add employee</button><button class="btn" data-t="list">Employees</button><button class="btn" data-t="leave">Leave</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button>
+<button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="add">Add employee</button><button class="btn" data-t="list">Employees</button><button class="btn" data-t="admin">IT Admin</button><button class="btn" data-t="leave">Leave</button><button class="btn" data-t="history">History</button><button class="btn" data-t="settings">Settings</button>
 </div>
 <section data-s="dash"></section>
 <section data-s="add" hidden></section>
 <section data-s="list" hidden></section>
+<section data-s="admin" hidden></section>
 <section data-s="leave" hidden></section>
 <section data-s="history" hidden></section>
 <section data-s="settings" hidden></section>
-</div>
+</main></div>
+<script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/hr.js"></script>
 <script src="js/mobile.js" defer></script>
 </body></html>

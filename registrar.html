@@ -3,9 +3,15 @@
 <link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>Registrar - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css">
 <!-- SheetJS: used only to download (export) lists as Excel files -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</head><body><div class="wrap wide">
-<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span><span id="who">Registrar</span></div>
-<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+</head><body class="has-side"><div class="shell">
+<aside class="side" id="sidePanel" aria-label="My account">
+  <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+    <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><span id="who" hidden></span></div>
+  <nav id="sideNav" aria-label="Pages"></nav>
+  <div class="who"><button class="btn" id="out" type="button">Sign out</button></div>
+</aside>
+<main class="main">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span></div>
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="tabs noprint" id="tabs">
 <button class="btn" data-t="dash">Dashboard</button><button class="btn" data-t="reg">Student registration</button><button class="btn" data-t="reqs">School requirements</button><button class="btn" data-t="enroll">Enrollment</button>
@@ -198,7 +204,8 @@
 <p class="muted fine">Add your own fields. <b>Student registration</b> fields appear on the registration form. <b>Enrollment</b> fields appear on the Enrollment form. <b>Master list</b> fields are filled in while editing a student from the Master list. All of them show as columns in the lists, can be downloaded to Excel, and can be downloaded to Excel.</p>
 <div id="fieldsBox"></div></div>
 </section>
-</div>
+</main></div>
+<script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/registrar.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>

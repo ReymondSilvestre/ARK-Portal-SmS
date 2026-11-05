@@ -930,6 +930,38 @@ function actHrDeleteEmployee(actor, p) {
   mirrorOps(ops);
   return { ok: true };
 }
+/** HR: the IT Admin of the school is an employee too, but has no HR record (the Super Admin creates that account).
+ *  HR keeps the IT Admin's name, position, department, contact number and 2x2 photo here; they show in the IT Admin's side panel.
+ *  The sign-in email, password and account status stay with the Super Admin / IT Admin. */
+function actHrAdminGet(actor) {
+  var S = makeS(actor); if (!S.isHR) fail('permission-denied', 'Only HR can open this.');
+  var us = scan('users', { schoolId: [S.sid] }), uids = colOf(us.t, 0), out = [];
+  if (us.hits.length > 12) colOf(us.t, 4);
+  us.hits.forEach(function (h) {
+    var u = unpack(cellJson(us.t, h.i)); if (u.role !== 'admin') return;
+    out.push({ uid: uids[h.i], displayName: u.displayName || '', email: u.email || '', position: u.position || '', department: u.department || '', contact: u.contact || '', photo: u.photo || '', status: u.status || 'active' });
+  });
+  return { admins: out };
+}
+function actHrAdminSave(actor, p) {
+  var S = makeS(actor); if (!S.isHR) fail('permission-denied', 'Only HR can change the IT Admin information.');
+  var uid = String(p.uid || ''), u = getDoc('users', uid);
+  if (!u || u.role !== 'admin' || u.schoolId !== S.sid) fail('not-found', 'That IT Admin account was not found in your school.');
+  var name = String(p.displayName || '').trim(), pos = String(p.position || '').trim(), dep = String(p.department || '').trim(), con = String(p.contact || '').trim(), photo = String(p.photo || '');
+  if (name.length < 3 || name.length > 100) fail('invalid-argument', 'Enter the IT Admin name (3 to 100 characters).');
+  if (pos.length > 80 || dep.length > 80 || con.length > 40) fail('invalid-argument', 'The position, department or contact number is too long.');
+  if (!photoOk({ photo: photo })) fail('invalid-argument', 'The photo is not valid. Choose a JPG or PNG picture again.');
+  var lock = LockService.getScriptLock(); lock.waitLock(25000);
+  try {
+    u.displayName = name;
+    [['position', pos], ['department', dep], ['contact', con], ['photo', photo]].forEach(function (kv) { if (kv[1]) u[kv[0]] = kv[1]; else delete u[kv[0]]; });
+    putDoc('users', uid, u);
+    putDoc('hrLog', newId(), { schoolId: S.sid, byUid: actor.uid, byName: actor.me.displayName || '', action: 'Edited the IT Admin information', targetName: name, targetNo: '', createdAt: { __ts: nowMs() } });
+    flushAll();
+  } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  dropActor(uid);   // the IT Admin's next page load shows the new photo / name
+  return { ok: true };
+}
 /* Registrar: delete the login account of one student of the registrar's own school (even if it is already created).
    The registration / enrollment records are NOT touched here; the web page removes or marks them afterwards. */
 function actRegistrarDropStudentAccount(actor, p) {
@@ -1270,6 +1302,8 @@ function runCall(actor, c) {
         case 'hrCandidates': return actHrCandidates(actor);
         case 'hrSyncAccounts': return actHrSyncAccounts(actor);
         case 'hrDeleteEmployee': return actHrDeleteEmployee(actor, c.data || {});
+        case 'hrAdminGet': return actHrAdminGet(actor);
+        case 'hrAdminSave': return actHrAdminSave(actor, c.data || {});
       }
   }
   fail('invalid-argument', 'Unknown request.');
@@ -1297,7 +1331,7 @@ function doPost(e) {
   catch (err) { _tabs = {}; out = { ok: false, error: { code: err.code || 'internal', message: err.code ? err.message : 'Something went wrong. Please try again.' } }; if (!err.code) console.error(err && err.stack || err); }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
-var CODE_VERSION = 'HR-2';
+var CODE_VERSION = 'HR-3';
 function doGet() { return ContentService.createTextOutput('ARK Exam Portal API is running. Version: ' + CODE_VERSION); }
 
 /* ============================== spreadsheet menu: first-time setup ============================== */

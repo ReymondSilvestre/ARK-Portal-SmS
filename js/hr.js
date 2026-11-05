@@ -92,6 +92,7 @@ function show(t) {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
   if (t === "history" && !S.logLoaded) run(loadHistory);
   if (t === "leave") run(loadLeave);
+  if (t === "admin") run(loadAdmins);
 }
 $("tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.t); };
 const sec = (t) => document.querySelector(`[data-s="${t}"]`);
@@ -251,6 +252,48 @@ function renderHistory() {
   sec("history").innerHTML = `<div class="panel"><div class="tablewrap"><table>${hdr(["When", "By", "Action", "Employee"]) +
     (S.log.map((l) => rowHtml([l.createdAt?.toDate ? l.createdAt.toDate().toLocaleString() : "-", esc(l.byName || ""), esc(l.action || ""), esc(`${l.targetName || ""}${l.targetNo ? " (" + l.targetNo + ")" : ""}`)])).join("") || emptyRow(4, "Nothing recorded yet."))}</table></div></div>`;
 }
+
+/* ---------- the IT Admin: HR keeps the IT Admin's information too (name, position, department, contact, 2x2 photo) ---------- */
+const A = { list: [], photo: "", loaded: false };
+async function loadAdmins() {
+  const r = await callFn("hrAdminGet"); A.list = r.admins || []; A.loaded = true; renderAdmins();
+}
+function renderAdmins() {
+  const posList = [...new Set([...S.lists.positions, ...A.list.map((a) => a.position).filter(Boolean)])], depList = [...new Set([...S.lists.departments, ...A.list.map((a) => a.department).filter(Boolean)])];
+  sec("admin").innerHTML = `<div class="panel"><h2>IT Admin</h2><p class="muted">The IT Admin is an employee too. Keep the name, position, department, contact number and 2x2 photo here. They show in the IT Admin's side panel.
+    The sign-in email and the password stay with the Super Admin and the IT Admin.</p></div>` +
+    (A.list.map((a, i) => `<div class="panel"><form data-adm="${i}" novalidate><h3 style="margin-top:0;color:var(--ink)">${esc(a.displayName || "IT Admin")}</h3>
+      <div class="photo-box"><img class="pv" alt="2x2 photo preview" data-pv${a.photo ? ` src="${esc(a.photo)}"` : " hidden"}><div><label>2x2 picture <small>(JPG or PNG; it is cropped to a square)</small><input type="file" accept="image/*" data-file></label>
+        <button class="btn small" type="button" data-photodel${a.photo ? "" : " hidden"}>Remove photo</button><p class="muted" data-note></p></div></div>
+      <div class="row"><label>Full name<input data-k="displayName" maxlength="100" value="${esc(a.displayName)}" autocomplete="off"></label>
+        <label>Position <small>Example: IT Administrator</small><input data-k="position" maxlength="80" list="admPos" value="${esc(a.position)}" autocomplete="off"></label>
+        <label>Department<input data-k="department" maxlength="80" list="admDep" value="${esc(a.department)}" autocomplete="off"></label>
+        <label>Contact No.<input data-k="contact" maxlength="40" value="${esc(a.contact)}" autocomplete="off"></label>
+        <label>Sign-in email <small>Cannot be changed here</small><input value="${esc(a.email)}" readonly></label></div>
+      <div class="savebar noprint"><button class="btn primary" type="submit">Save IT Admin information</button></div></form></div>`).join("") ||
+      `<div class="panel"><p>No IT Admin account was found for this school.</p></div>`) +
+    `<datalist id="admPos">${posList.map((x) => `<option value="${esc(x)}">`).join("")}</datalist><datalist id="admDep">${depList.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
+}
+sec("admin").addEventListener("change", (e) => {
+  const f = e.target.closest("[data-file]"); if (!f) return;
+  const form = f.closest("form"), a = A.list[+form.dataset.adm], file = f.files[0]; if (!file) return;
+  run(async () => { a.photo = await squarePhoto(file); const pv = form.querySelector("[data-pv]"); pv.src = a.photo; pv.hidden = false; form.querySelector("[data-photodel]").hidden = false; form.querySelector("[data-note]").textContent = "New photo ready. Press Save to keep it."; });
+});
+sec("admin").addEventListener("click", (e) => {
+  const d = e.target.closest("[data-photodel]"); if (!d) return;
+  const form = d.closest("form"), a = A.list[+form.dataset.adm]; a.photo = "";
+  const pv = form.querySelector("[data-pv]"); pv.removeAttribute("src"); pv.hidden = true; d.hidden = true; form.querySelector("[data-file]").value = ""; form.querySelector("[data-note]").textContent = "The photo will be removed when you save.";
+});
+sec("admin").addEventListener("submit", (e) => {
+  const form = e.target.closest("form[data-adm]"); if (!form) return; e.preventDefault();
+  const a = A.list[+form.dataset.adm], v = Object.fromEntries([...form.querySelectorAll("[data-k]")].map((el) => [el.dataset.k, el.value.trim()]));
+  if (v.displayName.length < 3) return flash("Enter the IT Admin's full name.");
+  const btn = form.querySelector('button[type="submit"]'); btn.disabled = true;
+  run(async () => {
+    try { await callFn("hrAdminSave", { uid: a.uid, ...v, photo: a.photo || "" }); Object.assign(a, v); S.logLoaded = false; renderAdmins(); flash("The IT Admin information was saved. The IT Admin sees it at the next page load.", true); }
+    finally { btn.disabled = false; }
+  });
+});
 
 /* ---------- settings ---------- */
 function renderSettings() {

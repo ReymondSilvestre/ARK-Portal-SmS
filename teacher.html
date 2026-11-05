@@ -4,9 +4,15 @@
 <style id="pg">@page{margin:10mm}</style>
 <!-- SheetJS: used only to import Excel class lists and to export results to .xlsx -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</head><body><div class="wrap">
-<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span><span id="who">Teacher</span></div>
-<span><a id="adminLink" href="admin.html" class="btn small" hidden>&larr; IT Admin</a> <span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+</head><body class="has-side"><div class="shell">
+<aside class="side" id="sidePanel" aria-label="My account">
+  <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+    <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><span id="who" hidden></span></div>
+  <nav id="sideNav" aria-label="Pages"></nav>
+  <div class="who"><a id="adminLink" href="admin.html" class="btn" hidden>&larr; IT Admin</a><button class="btn" id="out" type="button">Sign out</button></div>
+</aside>
+<main class="main">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span></div>
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="tabs noprint" id="tabs">
 <button class="btn" data-t="classes">Sections</button><button class="btn" data-t="students">Students</button>
@@ -164,7 +170,8 @@
 <button class="btn primary" id="xlsx">Download Excel</button><button class="btn" onclick="print()">Print report</button></div>
 <p id="stats"></p><div id="waiting" class="noprint" hidden></div><div class="tablewrap"><table id="reTbl"></table></div>
 <h2 style="margin-top:1rem">Item analysis (% correct)</h2><div class="q" id="items"></div></div></section>
-</div>
+</main></div>
+<script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/teacher.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>

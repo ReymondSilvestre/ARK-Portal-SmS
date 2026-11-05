@@ -62,7 +62,7 @@ function start({ user, profile }) {
 
   /* ---- the 2x2 photo (kept by HR) and the position, beside the person's name ---- */
   const who = document.getElementById("who");
-  if (who && who.parentNode && !document.getElementById("whoPhoto")) {
+  if (who && who.parentNode && !document.getElementById("whoPhoto") && !document.getElementById("sidePhoto")) {   // pages with the side panel show the photo, position and department there (js/sidepanel.js)
     if (profile.photo) { const im = Object.assign(document.createElement("img"), { src: profile.photo, alt: "", id: "whoPhoto", className: "who-photo" }); who.parentNode.insertBefore(im, who); }
     const pos = [profile.position, profile.department].filter(Boolean).join(", ") || (profile.role === "admin" ? "IT Admin" : "");
     if (pos) { const sm = Object.assign(document.createElement("small"), { className: "who-pos", id: "whoPos", textContent: pos }); who.after(sm); }

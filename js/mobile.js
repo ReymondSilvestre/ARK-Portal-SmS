@@ -45,13 +45,13 @@
   var scrim = document.createElement("div"); scrim.className = "navscrim"; scrim.hidden = true; body.appendChild(scrim);
   var drawer, list, lastFocus;
 
-  if (tabs) { // teacher / student: build a drawer from the tab buttons
+  if (tabs && !side) { // student page: build a drawer from the tab buttons
     drawer = document.createElement("nav");
     drawer.className = "navdrawer"; drawer.id = "navDrawer"; drawer.setAttribute("aria-label", "Main menu"); drawer.hidden = true;
     drawer.innerHTML = '<div class="navhead"><b>Menu</b><button type="button" class="navclose" aria-label="Close menu">&times;</button></div><div class="navlist"></div><div class="navfoot"></div>';
     body.appendChild(drawer);
     list = drawer.querySelector(".navlist");
-  } else { // admin: the existing side bar becomes the drawer
+  } else { // every employee page: the side panel (photo, name, menu, leave request, sign out) becomes the drawer
     drawer = side; drawer.id = drawer.id || "navDrawer";
     var x = document.createElement("button"); x.type = "button"; x.className = "navclose"; x.setAttribute("aria-label", "Close menu"); x.innerHTML = "&times;";
     drawer.insertBefore(x, drawer.firstChild);
@@ -64,7 +64,7 @@
     return on ? on.textContent.replace(/\s*\(\d+\)\s*$/, "") : "Menu";
   }
   function buildItems() {
-    if (!tabs) return;
+    if (!tabs || side) return;
     list.innerHTML = "";
     [].forEach.call(tabs.querySelectorAll("button"), function (b) {
       var i = document.createElement("button");
@@ -89,12 +89,12 @@
   function close() {
     drawer.classList.remove("open"); scrim.classList.remove("open"); body.classList.remove("nav-open");
     btn.setAttribute("aria-expanded", "false");
-    setTimeout(function () { if (!drawer.classList.contains("open")) { scrim.hidden = true; if (tabs) drawer.hidden = true; } }, 200);
+    setTimeout(function () { if (!drawer.classList.contains("open")) { scrim.hidden = true; if (tabs && !side) drawer.hidden = true; } }, 200);
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
   btn.onclick = function () { drawer.classList.contains("open") ? close() : open(); };
   scrim.onclick = close;
-  drawer.addEventListener("click", function (e) { if (e.target.closest(".navclose")) close(); if (!tabs && e.target.closest("nav a")) close(); });
+  drawer.addEventListener("click", function (e) { if (e.target.closest(".navclose")) close(); if (side && e.target.closest("nav a, nav button, .who .btn")) close(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && drawer.classList.contains("open")) close(); });
   window.matchMedia("(min-width:761px)").addEventListener("change", function (e) { if (e.matches && drawer.classList.contains("open")) close(); });
 
@@ -102,21 +102,6 @@
   var ticking = false;
   function onScroll() { if (ticking) return; ticking = true; requestAnimationFrame(function () { ticking = false; body.classList.toggle("scrolled", window.scrollY > 70); }); }
   window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
-
-  /* IT Admin: show the school name and the signed-in user right under the menu button (they live in the drawer otherwise) */
-  if (side) {
-    var sch = document.getElementById("school"), who = document.getElementById("who");
-    var ms = document.createElement("small"); ms.className = "mobschool"; ms.hidden = true;
-    var mw = document.createElement("div"); mw.className = "mobwho"; mw.hidden = true;
-    var h1 = top.querySelector("h1"); top.insertBefore(ms, h1); top.insertBefore(mw, h1);
-    var copy = function () {
-      ms.textContent = sch ? sch.textContent.trim() : ""; ms.hidden = !ms.textContent;
-      mw.textContent = who ? who.textContent.trim() : ""; mw.hidden = !mw.textContent;
-    };
-    var mo = new MutationObserver(copy);
-    [sch, who].forEach(function (n) { if (n) mo.observe(n, { childList: true, characterData: true, subtree: true }); });
-    copy();
-  }
 
   /* keep the button label in step with the active tab, and hide the whole menu while the tabs are hidden (student exam room) */
   function sync() {

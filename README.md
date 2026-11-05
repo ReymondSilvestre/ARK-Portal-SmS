@@ -64,6 +64,9 @@ Apps Script > **Deploy > Manage deployments > pencil > Version: New version > De
 3. The **IT Admin** opens Accounts, chooses the employee from HR's list and the account type, and creates the login. The IT Admin only sees name, Employee No., birthday and position, never the HR details.
 4. The login is linked to the HR record. HR sees **Has an account**; removing the account keeps the employee in the HR records. An employee who has an account cannot be deleted from HR until the account is removed.
 
+## Side panel (all employee pages)
+Every employee page (IT Admin, teacher, registrar, finance, custodian, guidance, HR, other staff) has the same left side panel: photo, account name, position and department, the page menu, **Leave request** and **Sign out**. The school logo and name are in the upper centre. HR edits the IT Admin's name, position, department, contact and photo under **HR > IT Admin**.
+
 ## Leave requests
 (HR can file leave for employees without an account, and approve its own leave. Every position can have an account: use account type **Other staff** for positions without a special page.)
 Every employee account (teacher, registrar, finance, custodian, guidance, HR and the IT Admin) has a **Leave request** button in the top bar. Requests go to **HR > Leave**, where HR approves or rejects them and monitors the days used per leave type (set under HR > Settings > Leave types). HR cannot decide its own request.

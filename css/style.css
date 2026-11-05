@@ -586,3 +586,60 @@ body.lv-open{overflow:hidden}
 .photo-box .pv{width:96px;height:96px;object-fit:cover;border:1px dashed #aaa;border-radius:6px;background:#f2f2f2}
 .big-photo{width:140px;height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#ddd)}
 .lv-sub{display:flex;gap:.5rem;flex-wrap:wrap;margin:.2rem 0 1rem}.lv-sub .btn.on{background:var(--red,#b3121f);color:#fff;border-color:var(--red,#b3121f)}
+
+
+/* =====================================================================
+   v8: the SAME side panel for every employee page (IT Admin, teacher, registrar, finance,
+   custodian, guidance, HR, other staff):  photo > name > position > department > menu > Leave request > Sign out.
+   The school logo and name stay in the upper centre.  (js/sidepanel.js fills it in.)
+   ===================================================================== */
+@media screen and (min-width:761px){.shell{grid-template-columns:16rem minmax(0,1fr)}}
+.side{display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+.side-profile{text-align:center;padding:.4rem .2rem 1rem;border-bottom:1px solid #444;margin-bottom:.8rem}
+.side-photo-wrap{width:104px;height:104px;margin:0 auto .7rem}
+.side-photo,.side-avatar{width:104px;height:104px;border-radius:50%;display:block;border:3px solid #fff}
+.side-photo{object-fit:cover;background:#333}
+.side-avatar{display:grid;place-items:center;background:var(--red);color:#fff;font-size:2rem;font-weight:700;letter-spacing:.04em}
+.side-name{font-weight:700;font-size:1.05rem;line-height:1.3;color:#fff;overflow-wrap:anywhere}
+.side-pos{color:#e6e6e6;font-size:.9rem;margin-top:.15rem;overflow-wrap:anywhere}
+.side-dept{color:#aaa;font-size:.82rem;overflow-wrap:anywhere}
+.side-school{color:#bbb;font-size:.78rem;margin-top:.45rem;overflow-wrap:anywhere}
+.side nav{flex:1 1 auto}
+.sidenav-item{display:block;width:100%;text-align:left;font:inherit;color:#ddd;background:none;border:0;padding:.6rem .7rem;border-radius:6px;margin-bottom:.2rem;cursor:pointer}
+.sidenav-item:hover{background:#333}
+.sidenav-item.on{background:var(--red);color:#fff}
+.side .who{position:static;margin-top:1rem;padding-top:.8rem;border-top:1px solid #444;display:grid;gap:.5rem}
+.side .who .btn{margin:0;width:100%;background:transparent;color:#fff;border-color:#777;text-align:center;text-decoration:none;display:block}
+.side .who .btn:hover{background:#333}
+.side .who #out{border-color:#e6a1a6;color:#ffb4b9}
+body.has-side #tabs{display:none}
+
+/* school logo + name in the upper centre */
+body.has-side .top{position:relative;justify-content:center;margin-bottom:.8rem}
+body.has-side .top>.brand{margin:0 auto;flex-direction:column;align-items:center;text-align:center}
+body.has-side .top>.brand.has-school{align-items:center}
+body.has-side .top .school-id{flex-direction:column;justify-content:center;text-align:center;gap:.35rem}
+body.has-side .top .school-logo{height:3.4rem;width:3.4rem}
+body.has-side .top .school-id .mark.logo img{height:3.4rem}
+body.has-side .top .brand-school{font-size:1.15rem}
+body.has-side .top>.sync{position:absolute;right:0;top:.2rem}
+body.has-side .main>h1{margin:.2rem 0 .8rem}
+@media print{.main{padding:0}}
+
+@media screen and (max-width:760px){
+  /* header on a phone:  [menu]  [school logo + name, centred]  [online dot] */
+  body.has-side .top{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.8rem}
+  body.has-side .top>.brand{flex:1;min-width:0;margin:0}
+  body.has-side .top>.sync,body.has-side.has-nav .top>:last-child{position:static;min-width:2.9rem;justify-content:flex-end;align-self:center}
+  body.has-side .top>.navbtn{order:-1}
+  body.has-side .top .school-logo,body.has-side .top .school-id .mark.logo img{height:2.8rem;width:auto}
+  body.has-side .top .school-logo{width:2.8rem}
+  body.has-side .top .brand-school{font-size:1rem}
+  /* the side panel is the slide-in menu */
+  body.has-side.has-nav .side{padding:1rem 1rem 1.2rem}
+  body.has-side.has-nav .side .who{position:static;left:auto;right:auto;bottom:auto;margin-top:1rem}
+  body.has-side.has-nav .side nav{flex:1 1 auto;display:block}
+  body.has-side.has-nav .sidenav-item,body.has-side.has-nav .side nav a{display:block;padding:.7rem 1rem;min-height:2.7rem;margin:0 0 .2rem}
+  body.has-side .side .who .btn{min-height:2.9rem}
+  body.has-side .side-photo-wrap,body.has-side .side-photo,body.has-side .side-avatar{width:88px;height:88px}
+}

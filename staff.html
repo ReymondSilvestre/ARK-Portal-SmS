@@ -2,14 +2,21 @@
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <title>My account - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css">
-</head><body><div class="wrap">
-<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span><span id="who">Staff</span></div>
-<span><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span> <button class="btn small" id="out">Sign out</button></span></div>
+</head><body class="has-side"><div class="shell">
+<aside class="side" id="sidePanel" aria-label="My account">
+  <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+    <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><span id="who" hidden></span></div>
+  <nav id="sideNav" aria-label="Pages"></nav>
+  <div class="who"><button class="btn" id="out" type="button">Sign out</button></div>
+</aside>
+<main class="main">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span></div>
 <div id="msg" class="notice noprint" hidden role="alert"></div>
 <div class="panel"><div class="photo-box"><img id="pic" class="big-photo" alt="" hidden><div><h2 id="name" style="margin:0">My account</h2><p class="muted" id="info"></p></div></div></div>
 <div class="panel"><h2>Leave</h2><p class="muted">Send a leave request to HR and see the answer here. You get a message in the middle of the screen when HR has decided.</p>
 <button class="btn primary" id="goLeave" type="button">Send a leave request</button></div>
-</div>
+</main></div>
+<script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/staff.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>

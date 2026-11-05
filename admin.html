@@ -2,24 +2,25 @@
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>IT Admin - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css"></head>
-<body>
+<body class="has-side">
 <div class="shell">
-  <aside class="side">
-    <div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span><span>IT Admin</span></div>
-    <p class="muted" style="color:#bbb;margin:.2rem 0 1rem;font-size:.85rem" id="school"></p>
-    <nav>
+  <aside class="side" id="sidePanel" aria-label="My account">
+    <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+      <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><div class="side-school" id="school"></div><span id="who" hidden></span></div>
+    <nav id="sideNav" aria-label="Pages">
       <a href="#dashboard" data-v="dashboard">Dashboard</a>
       <a href="#teachers" data-v="teachers">Accounts</a>
       <a href="#branding" data-v="branding">Branding</a>
       <a href="#activity" data-v="activity">Activity log</a>
       <a href="teacher.html" class="tools">Teacher tools &rarr;</a>
     </nav>
-    <div class="who"><span id="who"></span><button class="btn" id="out">Sign out</button></div>
+    <div class="who"><button class="btn" id="out" type="button">Sign out</button></div>
   </aside>
 
   <main class="main">
-    <div class="top"><h1 id="title">Dashboard</h1>
+    <div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div>
       <span class="sync" id="sync" role="status"><i class="dot"></i><span>Online</span></span></div>
+    <h1 id="title">Dashboard</h1>
     <div id="msg" class="notice" hidden role="alert"></div>
 
     <section data-view="dashboard">
@@ -82,6 +83,7 @@
   <code class="pw" id="dlgPw" hidden></code>
   <div class="row"><button class="btn" id="dlgCopy" hidden>Copy</button><button class="btn primary" id="dlgOk">Close</button></div>
 </dialog>
+<script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/admin.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>

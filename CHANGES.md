@@ -1,5 +1,17 @@
 # Revision notes
 
+## NEW (update 3): one side panel for every employee page, HR edits the IT Admin's information
+**To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**; upload the whole site folder to GitHub again (new file: `js/sidepanel.js`; changed: all employee pages, `css/style.css`, `js/mobile.js`, `js/leave.js`, `js/hr.js`).
+
+* **Same side panel on every employee page** (IT Admin, teacher, registrar, finance, custodian, guidance, HR, other staff): the person's **photo** (initials circle if there is no photo yet), **account name**, **position** and **department**, then the page menu, then **Leave request** and **Sign out** at the bottom.
+  The menu is built from the page's own tabs, so every page works as before. On a phone the panel is the slide-in menu.
+* **School logo and school name** stay in the **upper centre** of every page (set under IT Admin > Branding).
+* **HR > IT Admin (new tab):** HR keeps the IT Admin's full name, position, department, contact number and 2x2 photo. They show in the IT Admin's side panel the next time the IT Admin opens a page. The sign-in email and password stay with the Super Admin / IT Admin. The change is written to HR > History.
+* Photo, position and department of the other employees still come from HR > Employees > Edit.
+* The student page is unchanged.
+
+---
+
 ## NEW (update 2): loading animation, HR own leave, leave for people without accounts, any position can have an account, HR delete with account, 2x2 photo
 **To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**; upload the whole site folder to GitHub again (new files: `staff.html`, `js/staff.js`). `js/config.js` already holds your Web app URL.
 
