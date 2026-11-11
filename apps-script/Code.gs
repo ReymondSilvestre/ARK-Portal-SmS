@@ -24,12 +24,14 @@ var KNOWN = ['schools', 'users', 'auditLogs', 'systemSettings', 'counters', 'cla
   'scanResults', 'modules', 'moduleChunks', 'examPapers', 'examKeys', 'examSubmissions', 'examAttempts', 'classes', 'registry',
   'enrollmentRecords', 'registrarSettings', 'registrarLog', 'payments', 'studentAccounts', 'financeSettings', 'financeLog',
   'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
-  'employees', 'hrSettings', 'hrLog', 'leaveRequests'];
+  'employees', 'hrSettings', 'hrLog', 'leaveRequests',
+  'scheduleSemesters', 'classSchedules', 'scheduleSettings'];
 var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'examKeys', 'examPapers', 'moduleChunks', 'modules',
   'examinations', 'answerKeys', 'answerSheets', 'enrollments', 'teacherLinks', 'classCodes', 'students', 'classes',
   'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog',
   'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
-  'employees', 'hrSettings', 'hrLog', 'leaveRequests'];
+  'employees', 'hrSettings', 'hrLog', 'leaveRequests',
+  'scheduleSemesters', 'classSchedules', 'scheduleSettings'];
 /* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
 var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr', 'staff'];   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
 var MANAGED_ROLES = EMP_ROLES.concat(['student']);
@@ -276,7 +278,7 @@ function makeS(actor, now) {
   S.exists = function (c, id) { return !!S.get(c, id); };
   S.validAdviser = function (uid) { var u = S.get('users', uid); return !!u && u.role === 'teacher' && u.schoolId === S.sid; };
   S.studentRec = function (sid) { return S.get('students', sid) || {}; };
-  S.myStudent = function () { return S.studentRec(me.studentId); };
+  S.myStudent = function () { return S._ms || (S._ms = S.studentRec(me.studentId)); };
   S.studentSees = function (ownerUid, classId) {
     if (!S.isStudent) return false;
     var ms = S.myStudent();
@@ -517,13 +519,16 @@ RULES.guidanceSettings = ownRoleSettings('isGuidance'); RULES.guidanceLog = ownR
 var ACCT_FIELDS = ['accountUid', 'accountRole', 'accountCreatedAt'];
 function sameAcct(a, b) { return ACCT_FIELDS.every(function (k) { return jeq(a[k], b[k]); }); }
 function photoOk(n) { return !('photo' in n) || n.photo === '' || (isStr(n.photo) && n.photo.length <= 19000 && n.photo.indexOf('data:image/') === 0); }
+/* HR and the IT Admin both register and edit employees (the IT Admin may also fill in the full record, not only the account details). */
 RULES.employees = {
-  read: function (S, d) { return (S.isHR && S.inMySchool(d)) || S.isSuper; },
-  create: function (S, id, n) { return S.isHR && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId) && photoOk(n); },
-  update: function (S, id, o, n) { return S.isHR && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n) && photoOk(n); },
-  del: function (S, id, o) { return (S.isHR && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
+  read: function (S, d) { return ((S.isHR || S.isAdmin) && S.inMySchool(d)) || S.isSuper; },
+  create: function (S, id, n) { return (S.isHR || S.isAdmin) && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId) && photoOk(n); },
+  update: function (S, id, o, n) { return (S.isHR || S.isAdmin) && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n) && photoOk(n); },
+  del: function (S, id, o) { return ((S.isHR || S.isAdmin) && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
 };
 RULES.hrSettings = ownRoleSettings('isHR'); RULES.hrLog = ownRoleLog('isHR');
+/* the IT Admin's registrations are written to HR's history too (HR reads them, the IT Admin only adds lines) */
+RULES.hrLog.create = function (S, id, n) { return (S.isHR || S.isAdmin) && n.schoolId === S.sid && n.byUid === S.uid; };
 /* every employee account may READ HR's settings (it holds only the leave types and drop-down lists); only HR writes them */
 RULES.hrSettings.read = function (S, d, id) { return ((S.isHR || (S.live && LEAVE_ROLES.indexOf(S.me.role) >= 0)) && id === S.sid) || S.isSuper; };
 
@@ -548,6 +553,42 @@ RULES.leaveRequests = {
     return leaveFiler(S) && o.requesterUid === S.uid && o.status === 'Pending' && subset(df, ['status', 'updatedAt']) && n.status === 'Cancelled';
   },
   del: function (S, id, o) { return S.isSuper || (S.isHR && S.inMySchool(o)) || (leaveFiler(S) && o.requesterUid === S.uid && o.status !== 'Approved'); }
+};
+/* ---- Class schedules (made by the Registrar). Teachers and students only read what the Registrar has SENT (semester.published === true):
+   a teacher reads the entries that name him / her, a student reads the entries of his / her own section. ---- */
+var SCHED_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+function isHm(v) { return isStr(v) && /^\d{2}:\d{2}$/.test(v); }
+function schedSem(S, id) { S._sem = S._sem || {}; if (!(id in S._sem)) S._sem[id] = (isStr(id) && id) ? (getDoc('scheduleSemesters', id) || null) : null; return S._sem[id]; }
+function schedSent(S, d) { var sm = schedSem(S, d.semesterId); return !!sm && sm.schoolId === S.sid && sm.published === true; }
+function schedBody(S, n) {
+  var sm = schedSem(S, n.semesterId);
+  return !!sm && sm.schoolId === S.sid && isStr(n.subject) && n.subject.length > 0 && n.subject.length <= 80 && isStr(n.sectionId) && n.sectionId.length > 0 &&
+    SCHED_DAYS.indexOf(n.day) >= 0 && isHm(n.start) && isHm(n.end) && n.end > n.start && (!('room' in n) || (isStr(n.room) && n.room.length <= 60)) &&
+    (!('teacherName' in n) || (isStr(n.teacherName) && n.teacherName.length <= 120));
+}
+RULES.scheduleSemesters = {
+  read: function (S, d) { return S.isSuper || ((S.isRegistrar || S.isAdmin) && S.inMySchool(d)) || ((S.isTeacher || S.isStudent) && S.inMySchool(d) && d.published === true); },
+  create: function (S, id, n) { return S.isRegistrar && n.schoolId === S.sid && isStr(n.name) && n.name.length > 0 && n.name.length <= 80 && n.published !== true; },
+  update: function (S, id, o, n) { return S.isRegistrar && S.inMySchool(o) && n.schoolId === S.sid && isStr(n.name) && n.name.length > 0 && n.name.length <= 80; },
+  del: function (S, id, o) { return (S.isRegistrar && S.inMySchool(o)) || S.isSuper; }
+};
+RULES.classSchedules = {
+  read: function (S, d) {
+    if (S.isSuper || ((S.isRegistrar || S.isAdmin) && S.inMySchool(d))) return true;
+    if (!S.inMySchool(d)) return false;
+    if (S.isTeacher) return d.teacherUid === S.uid && schedSent(S, d);
+    if (S.isStudent) return !!d.sectionId && d.sectionId === S.myStudent().classId && schedSent(S, d);
+    return false;
+  },
+  create: function (S, id, n) { return S.isRegistrar && n.schoolId === S.sid && schedBody(S, n); },
+  update: function (S, id, o, n) { return S.isRegistrar && S.inMySchool(o) && n.schoolId === S.sid && schedBody(S, n); },
+  del: function (S, id, o) { return (S.isRegistrar && S.inMySchool(o)) || S.isSuper; }
+};
+RULES.scheduleSettings = {   // the Registrar's own lists (subjects, rooms) and the daily hour limit
+  read: function (S, d, id) { return ((S.isRegistrar || S.isAdmin) && id === S.sid) || S.isSuper; },
+  create: function (S, id, n) { return S.isRegistrar && id === S.sid && n.schoolId === S.sid; },
+  update: function (S, id, o, n) { return S.isRegistrar && id === S.sid && n.schoolId === S.sid; },
+  del: function (S) { return S.isSuper; }
 };
 ['examinations', 'answerKeys', 'answerSheets'].forEach(function (c) {
   RULES[c] = {
@@ -1107,6 +1148,11 @@ var REC = {
     head: ['School', 'Student ID No.', 'LRN', 'Student name', 'Gender', 'Grade level', 'Section', 'Cluster / strand', 'Term / quarter', 'School year', 'Learning modality', 'Adviser', 'Remark', 'Remark date', 'Remark note', 'Additional information', 'Enrolled on'],
     row: function (d, id, cx) {
       return [rSchool(cx, d.schoolId), d.studentNo, d.lrn, d.name, d.gender, d.gradeLevel, d.sectionName, d.strand, d.term, d.schoolYear, d.modality, d.adviserName, d.remark, rDate(d.remarkDate), d.remarkNote, rExtra(d.extra, rRegFields(cx, d.schoolId, ['enroll'])), rTs(d.createdAt)];
+    } },
+  regSched: { grp: 'registrar', src: 'classSchedules', tab: 'Registrar - Class schedule', wide: [],
+    head: ['School', 'Semester', 'Grade level', 'Section', 'Day', 'Start', 'End', 'Subject', 'Teacher', 'Room', 'Cluster / strand'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), d.semesterName, d.gradeLevel, d.sectionName, d.day, d.start, d.end, d.subject, d.teacherName, d.room, d.cluster];
     } },
   finPay: { grp: 'finance', src: 'payments', tab: 'Finance - Payments', wide: [13],
     head: ['School', 'Date of payment', 'Receipt / OR No.', 'Student ID No.', 'Student name', 'Grade level', 'School year', 'Voucher type', 'Payment for', 'Amount paid', 'Status', 'Reason (if voided)', 'Remarks', 'Recorded by', 'Recorded on'],

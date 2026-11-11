@@ -45,7 +45,7 @@ function setSync() {
 addEventListener("online", setSync); addEventListener("offline", setSync); setSync();
 
 /* ---------- navigation ---------- */
-const titles = { dashboard: "Dashboard", teachers: "Accounts", branding: "Branding", activity: "Activity log" };
+const titles = { dashboard: "Dashboard", employees: "Employee registration", teachers: "Accounts", branding: "Branding", activity: "Activity log" };
 function nav() {
   const v = titles[location.hash.slice(1)] ? location.hash.slice(1) : "dashboard";
   document.querySelectorAll("[data-view]").forEach((s) => (s.hidden = s.dataset.view !== v));
@@ -96,7 +96,7 @@ async function loadCandidates() {
 const candName = (c) => `${c.lastName}, ${c.firstName}${c.middleInitial ? " " + c.middleInitial + "." : ""}`;
 function renderCandidates() {
   const keepV = $("empSel").value, hrRole = $("roleSel").value === "hr";
-  $("empSel").innerHTML = (cands.length ? `<option value="">- Choose an employee -</option>` : `<option value="">${hrRole ? "" : "No employee is waiting. Ask HR to add them first."}</option>`) +
+  $("empSel").innerHTML = (cands.length ? `<option value="">- Choose an employee -</option>` : `<option value="">${hrRole ? "" : "No employee is waiting. Register one under Employee registration (or ask HR)."}</option>`) +
     (hrRole ? `<option value="__new">New HR person (type the details below)</option>` : "") +
     cands.map((c) => `<option value="${esc(c.key)}">${esc(c.employeeId)} - ${esc(candName(c))}${c.position ? " (" + esc(c.position) + ")" : ""}</option>`).join("");
   if ([...$("empSel").options].some((o) => o.value === keepV)) $("empSel").value = keepV;
@@ -116,6 +116,9 @@ $("empSel").addEventListener("change", () => {
   showEmpInfo();
 });
 $("roleSel").addEventListener("change", renderCandidates);
+/* the Employee registration page tells this page when an employee was added / changed, or when "Create account" was pressed for someone */
+addEventListener("employees-changed", () => loadCandidates().catch(() => {}));
+addEventListener("employee-pick", (e) => loadCandidates().then(() => { $("empSel").value = e.detail; $("empSel").dispatchEvent(new Event("change")); }).catch(() => {}));
 
 /* ---------- create the login of an employee HR has added: username = Employee No., password = birth year + first letter of last name ---------- */
 $("newT").addEventListener("submit", async (e) => {

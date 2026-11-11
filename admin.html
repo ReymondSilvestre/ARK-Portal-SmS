@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><script>if(/\.html$/.test(location.pathname))history.replaceState(null,"",location.pathname.replace(/(\/index)?\.html$/,"")+location.search+location.hash)</script>
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>IT Admin - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css"></head>
+<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>IT Admin - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/schedule.css"></head>
 <body class="has-side">
 <div class="shell">
   <aside class="side" id="sidePanel" aria-label="My account">
@@ -10,6 +10,7 @@
       <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><div class="side-school" id="school"></div><span id="who" hidden></span></div>
     <nav id="sideNav" aria-label="Pages">
       <a href="#dashboard" data-v="dashboard">Dashboard</a>
+      <a href="#employees" data-v="employees">Employee registration</a>
       <a href="#teachers" data-v="teachers">Accounts</a>
       <a href="#branding" data-v="branding">Branding</a>
       <a href="#activity" data-v="activity">Activity log</a>
@@ -38,7 +39,7 @@
     <section data-view="teachers" hidden>
       <div class="panel">
         <h2>Create an employee account</h2>
-        <p class="muted"><b>HR adds the employee first</b> (name, Employee No., birthday, position ...). You then choose that employee below and pick the account type. The employee signs in with the school code + Employee No.; the first password is the birth year + first letter of the last name (example <b>1985D</b>) and must be changed at first sign-in.</p>
+        <p class="muted"><b>The employee is registered first</b> (by HR, or by you under <a href="#employees">Employee registration</a>). You then choose that employee below and pick the account type. The employee signs in with the school code + Employee No.; the first password is the birth year + first letter of the last name (example <b>1985D</b>) and must be changed at first sign-in.</p>
         <form id="newT" class="row" novalidate>
           <label>Employee <small id="empHint">Added by HR</small><select name="employee" id="empSel"></select></label>
           <label>Account type<select name="role" id="roleSel"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option><option value="staff">Other staff (any position)</option><option value="hr">HR</option></select></label>
@@ -58,6 +59,10 @@
           <label>Show<select id="roleF"><option value="">All accounts</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="staff">Other staff only</option><option value="hr">HR only</option><option value="student">Students only</option></select></label></div>
         <div class="tablewrap"><table id="teachers"></table></div>
       </div>
+    </section>
+
+    <section data-view="employees" hidden>
+      <div id="empReg"><p class="muted">Loading...</p></div>
     </section>
 
     <section data-view="branding" hidden>
@@ -86,6 +91,7 @@
 </dialog>
 <script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/admin.js"></script>
+<script type="module" src="js/admin-employees.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>
 </body></html>

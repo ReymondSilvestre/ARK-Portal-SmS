@@ -3,7 +3,8 @@
    Records are stored per school in `employees` and are copied (in plain words) into the HR readable Google Sheet by the server. */
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding, staffKey, defaultStudentPassword } from "./auth.js";
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, deleteField, callFn, Timestamp } from "./db.js";
-import { DEFAULT_LEAVE_TYPES, workingDays, dateText as lvDate, STATUS_CLASS, rangeText, roleName, showPopup, errText } from "./leave.js";   // also puts the "Leave request" button (HR files its own leave too) in the top bar
+import { DEFAULT_LEAVE_TYPES, workingDays, dateText as lvDate, STATUS_CLASS, rangeText, roleName, showPopup, errText } from "./leave.js";
+import { printLeaveForms } from "./leave-form.js";   // the printable Application for Leave   // also puts the "Leave request" button (HR files its own leave too) in the top bar
 
 const $ = (id) => document.getElementById(id);
 const { user, profile, school } = await requireRole(["hr"]);
@@ -27,44 +28,8 @@ const nameOf = (e) => e.isAdmin ? (e.displayName || "IT Admin") : `${e.lastName}
 const pc = (a, b) => (b ? Math.round((a / b) * 1000) / 10 + "%" : "-");
 const bar = (a, b) => `<span class="bar"><i style="width:${b ? Math.min(100, Math.round((a / b) * 100)) : 0}%"></i></span>`;
 
-/* ---------- what is kept about an employee ---------- */
-const STATUSES = ["Active", "On leave", "Resigned", "Retired", "Terminated"];
-const TYPES = ["Regular", "Probationary", "Contractual", "Part-time", "Substitute"];
-const ACCESS = [["", "No portal account needed"], ["teacher", "Faculty / Teacher"], ["registrar", "Registrar"], ["finance", "Finance"], ["custodian", "Custodian"], ["guidance", "Guidance"], ["hr", "HR"], ["staff", "Other staff (principal, librarian, nurse, guard, driver ...)"]];
-const ACCESS_NAME = Object.fromEntries(ACCESS.filter(([k]) => k).map(([k, v]) => [k, v])); ACCESS_NAME.admin = "IT Admin";
-const DEFAULT_LISTS = {
-  positions: ["Teacher", "Head Teacher", "Principal", "Registrar", "Cashier / Finance Officer", "Guidance Counselor", "Custodian", "School Nurse", "HR Officer", "IT Administrator", "Librarian", "Security Guard", "Janitor / Utility", "Driver", "Other"],
-  departments: ["Elementary", "Junior High School", "Senior High School", "Administration", "Finance", "Registrar's Office", "Guidance", "Clinic", "Maintenance", "Security", "IT"],
-};
-const FIELDS = [
-  { id: "employeeId", label: "Employee No.", req: true, group: "Basic" },
-  { id: "lastName", label: "Last name", req: true, group: "Basic" },
-  { id: "firstName", label: "First name", req: true, group: "Basic" },
-  { id: "middleInitial", label: "M.I.", narrow: true, max: 1, group: "Basic" },
-  { id: "birthday", label: "Birthday", type: "date", req: true, group: "Basic" },
-  { id: "gender", label: "Gender", type: "select", options: ["Male", "Female"], group: "Basic" },
-  { id: "civilStatus", label: "Civil status", type: "select", options: ["Single", "Married", "Widowed", "Separated"], group: "Basic" },
-  { id: "position", label: "Position", type: "list", list: "positions", group: "Job" },
-  { id: "department", label: "Department", type: "list", list: "departments", group: "Job" },
-  { id: "employmentType", label: "Employment type", type: "select", options: TYPES, group: "Job" },
-  { id: "dateHired", label: "Date hired", type: "date", group: "Job" },
-  { id: "status", label: "Status", type: "select", options: STATUSES, req: true, def: "Active", group: "Job" },
-  { id: "accessType", label: "Portal account", type: "access", group: "Job", hint: "Only says what is needed. The IT Admin creates the account." },
-  { id: "contact", label: "Contact No.", group: "Contact" },
-  { id: "email", label: "Email", type: "email", group: "Contact", hint: "Optional. Used for password-reset links." },
-  { id: "address", label: "Address", type: "textarea", group: "Contact" },
-  { id: "emergencyName", label: "Emergency contact person", group: "Contact" },
-  { id: "emergencyContact", label: "Emergency contact No.", group: "Contact" },
-  { id: "sss", label: "SSS No.", group: "Government IDs" },
-  { id: "philhealth", label: "PhilHealth No.", group: "Government IDs" },
-  { id: "pagibig", label: "Pag-IBIG No.", group: "Government IDs" },
-  { id: "tin", label: "TIN", group: "Government IDs" },
-  { id: "prc", label: "PRC license No.", group: "Government IDs" },
-];
-const GROUPS = ["Basic", "Job", "Contact", "Government IDs"];
-/* the account type every position needs: the special pages for the offices below, "Other staff" for everybody else */
-const POSITION_ACCESS = { "Teacher": "teacher", "Head Teacher": "teacher", "Registrar": "registrar", "Cashier / Finance Officer": "finance", "Guidance Counselor": "guidance", "Custodian": "custodian", "HR Officer": "hr" };
-const accessFor = (pos) => (pos ? POSITION_ACCESS[pos] || "staff" : "");
+/* ---------- what is kept about an employee: js/employee-fields.js (shared with the IT Admin's registration page) ---------- */
+import { STATUSES, TYPES, ACCESS, ACCESS_NAME, DEFAULT_LISTS, FIELDS, GROUPS, POSITION_ACCESS, accessFor } from "./employee-fields.js";
 
 /* ---------- state ---------- */
 const S = { admins: [], group: "all", photo: "", leave: [], leaveTypes: DEFAULT_LEAVE_TYPES.map((t) => ({ ...t })), emps: [], lists: { positions: [...DEFAULT_LISTS.positions], departments: [...DEFAULT_LISTS.departments] }, log: [], logLoaded: false };
@@ -395,12 +360,12 @@ function renderLeave() {
     const q = LV.q.toLowerCase(), rows = L.filter((r) => (!LV.st || r.status === LV.st) && (!LV.type || r.leaveType === LV.type) && (!q || [r.requesterName, r.employeeId, r.leaveType, r.reason].join(" ").toLowerCase().includes(q)))
       .sort((a, b) => (a.status === "Pending" ? 0 : 1) - (b.status === "Pending" ? 0 : 1) || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     const act = (r) => (r.status === "Pending" ? `<button class="btn small primary" data-lv="Approved" data-id="${esc(r.id)}">Approve</button><button class="btn small danger" data-lv="Rejected" data-id="${esc(r.id)}">Reject</button>` :
-      r.status === "Cancelled" ? "" : `<button class="btn small" data-lv="Pending" data-id="${esc(r.id)}">Reopen</button>`) + `<button class="btn small" data-lvdel="${esc(r.id)}" title="Delete this request">Delete</button>`;
+      r.status === "Cancelled" ? "" : `<button class="btn small" data-lv="Pending" data-id="${esc(r.id)}">Reopen</button>`) + `<button class="btn small" data-lvprint="${esc(r.id)}" title="Print the Application for Leave (filled in automatically)">Print form</button><button class="btn small" data-lvdel="${esc(r.id)}" title="Delete this request">Delete</button>`;
     body = `<div class="panel"><h2>Leave request</h2><p class="muted">Sent by every employee account, including the IT Admin and HR itself. HR can also file a leave for an employee who has no account.</p>
     <div class="toolbar noprint"><label class="grow">Search<input id="lvQ" value="${esc(LV.q)}" placeholder="Name, Employee No. or reason" autocomplete="off"></label>
       <label>Status<select id="lvSt"><option value="">All</option>${["Pending", "Approved", "Rejected", "Cancelled"].map((x) => `<option${LV.st === x ? " selected" : ""}>${x}</option>`).join("")}</select></label>
       <label>Leave type<select id="lvTy"><option value="">All</option>${[...new Set([...types.map((x) => x.name), ...L.map((r) => r.leaveType)])].map((x) => `<option${LV.type === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
-      <button class="btn primary" id="lvFile" type="button">File a leave for an employee</button><button class="btn" id="lvXls" type="button">Download Excel</button></div>
+      <button class="btn primary" id="lvFile" type="button">File a leave for an employee</button><button class="btn" id="lvPrintAll" type="button" title="One form per request in the list below">Print forms (list below)</button><button class="btn" id="lvXls" type="button">Download Excel</button></div>
     <div class="tablewrap"><table id="lvTable">${hdr(["Filed", "Employee", "Leave", "Dates", "Days", "Reason", "Status", "Remarks", ""]) + (rows.map((r) => `<tr><td>${esc(r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : "-")}</td>
       <td>${esc(r.requesterName || "")}<br><small>${esc(r.employeeId || "")} ${esc(roleName(r.requesterRole))}${r.filedByHr ? " (filed by HR)" : ""}</small></td><td>${esc(r.leaveType)}</td><td>${esc(rangeText(r))}</td><td>${esc(r.days)}</td><td>${esc(r.reason || "-")}</td>
       <td><span class="badge ${STATUS_CLASS[r.status] || ""}">${esc(r.status)}</span>${r.decidedByName ? `<br><small>${esc(r.decidedByName)}</small>` : ""}</td><td>${esc(r.hrRemarks || "")}</td><td class="actions">${act(r)}</td></tr>`).join("") || emptyRow(9, "No leave requests found."))}</table></div></div>`;
@@ -426,6 +391,7 @@ function renderLeave() {
     $("lvSt").onchange = (e) => { LV.st = e.target.value; renderLeave(); }; $("lvTy").onchange = (e) => { LV.type = e.target.value; renderLeave(); }; $("lvFile").onclick = () => run(fileForEmployee); }
   if ($("lvYear")) $("lvYear").onchange = (e) => { LV.year = +e.target.value; renderLeave(); };
   if ($("lvXls")) $("lvXls").onclick = () => leaveExcel(L, leavePeople(), types.filter((x) => +x.days > 0), year);
+  if ($("lvPrintAll")) $("lvPrintAll").onclick = () => { const q = LV.q.toLowerCase(), list = L.filter((r) => (!LV.st || r.status === LV.st) && (!LV.type || r.leaveType === LV.type) && (!q || [r.requesterName, r.employeeId, r.leaveType, r.reason].join(" ").toLowerCase().includes(q))).slice(0, 60); if (!list.length) return flash("There is no leave request in the list to print."); printLeaveForms(list.map(formCtx)); };
   const tb = $("tabs").querySelector('[data-t="leave"]'); if (tb) tb.textContent = pend.length ? `Leave (${pend.length})` : "Leave";
 }
 /** HR files a leave for an employee, also one who has no portal account (a driver, a guard ...). */
@@ -451,9 +417,17 @@ async function fileForEmployee() {
 }
 sec("leave").addEventListener("click", (e) => {
   const pgb = e.target.closest("button[data-lvpage]"); if (pgb) { LV.page = pgb.dataset.lvpage; return renderLeave(); }
+  const pr = e.target.closest("button[data-lvprint]"); if (pr) { const r = S.leave.find((x) => x.id === pr.dataset.lvprint); return r && printLeaveForms([formCtx(r)]); }
   const dl = e.target.closest("button[data-lvdel]"); if (dl) { const r = S.leave.find((x) => x.id === dl.dataset.lvdel); return r && removeLeave(r); }
   const b = e.target.closest("button[data-lv]"); if (!b) return; const r = S.leave.find((x) => x.id === b.dataset.id); if (r) decide(r, b.dataset.lv);
 });
+/** Everything the printed Application for Leave needs: the request, the employee's HR record and the leave already used this year. */
+function formCtx(r) {
+  const emp = S.emps.find((e) => (r.requesterUid && e.accountUid === r.requesterUid) || (r.employeeId && e.employeeId === r.employeeId)) || null;
+  const same = (x) => (r.requesterUid && x.requesterUid === r.requesterUid) || (r.employeeId && x.employeeId === r.employeeId) || (!r.requesterUid && !r.employeeId && x.requesterName === r.requesterName);
+  return { req: r, emp, school, types: S.leaveTypes, hrName: profile.displayName, roleName,
+    used: (type, year, exceptId) => usedDays(S.leave.filter((x) => same(x) && x.id !== exceptId), type, year) };
+}
 async function removeLeave(r) {
   const a = await showPopup({ title: "Delete this leave request?", ok: false, html: `<p><b>${esc(r.requesterName)}</b><br>${esc(r.leaveType)}, ${esc(rangeText(r))}</p><p>It is removed from the monitoring too.</p>`, buttons: [{ label: "Keep", value: "no" }, { label: "Delete", value: "yes", primary: true, danger: true }] });
   if (a.value !== "yes") return;
@@ -461,6 +435,7 @@ async function removeLeave(r) {
   await loadLeave();
 }
 async function decide(r, status) {
+  let printAfter = false, preWin = null;
   const who = `<p><b>${esc(r.requesterName)}</b><br>${esc(r.leaveType)}, ${esc(rangeText(r))} (${esc(r.days)} day${+r.days === 1 ? "" : "s"})${r.reason ? `<br><small>${esc(r.reason)}</small>` : ""}</p>`;
   let remarks = "";
   if (status === "Rejected") {
@@ -469,16 +444,17 @@ async function decide(r, status) {
   } else if (status === "Approved") {
     const t = S.leaveTypes.find((x) => x.name === r.leaveType), used = usedDays(S.leave.filter((x) => x.requesterUid === r.requesterUid), r.leaveType, String(r.startDate).slice(0, 4));
     const over = t && +t.days > 0 && used + (+r.days || 0) > t.days ? `<p class="lv-pop-err">${esc(r.requesterName)} has used ${r1(used)} of ${t.days} days of ${esc(r.leaveType)}. Approving ${esc(r.days)} more goes over the limit.</p>` : "";
-    const a = await showPopup({ title: "Approve this leave?", html: who + over, input: { label: "Remarks for the employee (optional)" }, buttons: [{ label: "Back", value: "no" }, { label: "Approve leave", value: "yes", primary: true }] });
-    if (a.value !== "yes") return; remarks = a.text.trim();
+    const a = await showPopup({ title: "Approve this leave?", html: who + over, input: { label: "Remarks for the employee (optional)" }, buttons: [{ label: "Back", value: "no" }, { label: "Approve leave", value: "yes" }, { label: "Approve and print the form", value: "print", primary: true }] });
+    if (a.value !== "yes" && a.value !== "print") return; remarks = a.text.trim(); printAfter = a.value === "print"; if (printAfter) preWin = window.open("", "_blank");   // opened now, while the click is fresh, so the browser does not block it
   } else if ((await showPopup({ title: "Reopen this request?", html: who + "<p>It goes back to Pending.</p>", buttons: [{ label: "Back", value: "no" }, { label: "Reopen", value: "yes", primary: true }] })).value !== "yes") return;
   const b = writeBatch(), ref = doc(db, "leaveRequests", r.id), patch = { status, updatedAt: serverTimestamp() };
   if (status === "Pending") { patch.hrRemarks = deleteField(); patch.decidedBy = deleteField(); patch.decidedByName = deleteField(); patch.decidedAt = deleteField(); }
   else { patch.hrRemarks = remarks; patch.decidedBy = user.uid; patch.decidedByName = profile.displayName; patch.decidedAt = serverTimestamp(); }
   b.update(ref, patch);
   b.set(doc(collection(db, "hrLog")), { schoolId: SID, byUid: user.uid, byName: profile.displayName, action: status === "Pending" ? "Reopened leave request" : `${status} leave (${r.leaveType}, ${rangeText(r)})`, targetName: r.requesterName || "", targetNo: r.employeeId || "", createdAt: serverTimestamp() });
-  try { await b.commit(); } catch (e) { console.error(e); return showPopup({ title: "The decision was not saved", html: `<p>${esc(errText(e))}</p>`, ok: false }); }
+  try { await b.commit(); } catch (e) { console.error(e); if (preWin) preWin.close(); return showPopup({ title: "The decision was not saved", html: `<p>${esc(errText(e))}</p>`, ok: false }); }
   S.logLoaded = false; await loadLeave();
+  if (printAfter) { const fresh = S.leave.find((x) => x.id === r.id); if (fresh) printLeaveForms([formCtx(fresh)], preWin); else if (preWin) preWin.close(); }
   showPopup({ title: status === "Pending" ? "Request reopened" : status === "Approved" ? "Leave approved" : "Leave rejected", html: `<p>${esc(r.requesterName)}: ${esc(r.leaveType)}, ${esc(rangeText(r))}.</p>`, ok: status !== "Rejected" });
 }
 function leaveExcel(rows, people, cols, year) {

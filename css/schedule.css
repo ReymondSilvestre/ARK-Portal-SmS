@@ -1,0 +1,47 @@
+/* Class schedule maker + the schedule shown to teachers and students (js/schedule.js, js/schedule-view.js, js/my-schedule.js) */
+.sc-bar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end;margin:.4rem 0 .8rem}
+.sc-bar label{margin:0;min-width:15rem}
+.sc-bar .badge{align-self:center}
+.sc-tabs{display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0 1rem;border-bottom:2px solid var(--line);padding-bottom:.6rem}
+.sc-tabs .btn.on{background:var(--ink);color:#fff}
+.sc-card{border:1px solid var(--line);border-radius:8px;padding:1rem;margin-bottom:1rem;background:#fff}
+.sc-card h3{margin:0 0 .6rem;font-size:1.02rem}
+.sc-days{border:1px solid #8a8a8e;border-radius:6px;padding:.4rem .7rem;display:flex;flex-wrap:wrap;gap:.2rem .9rem;min-width:16rem}
+.sc-days legend{font-weight:600;padding:0 .3rem}
+.sc-chk{display:flex;align-items:center;gap:.4rem;font-weight:600;margin:0}
+.sc-chk input{display:inline-block;width:auto;margin:0}
+.sc-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
+.sc-chip{display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--ink);border-radius:99px;padding:.15rem .3rem .15rem .7rem;font-weight:600}
+.sc-chip button{border:0;background:none;font-size:1.15rem;line-height:1;cursor:pointer;color:var(--red);padding:0 .3rem}
+.sc-hrs{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 .6rem}
+.sc-hrs span{border:1px solid var(--line);border-radius:6px;padding:.15rem .55rem;background:#fafafa}
+.sc-hrs span.over{border-color:var(--red);background:#fdeced;color:#7a0c14}
+.sc-scroll{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+
+/* the weekly grid */
+.sc-grid{display:grid;grid-template-columns:62px repeat(var(--cols,6),minmax(118px,1fr));min-width:780px;font-size:.78rem}
+.sc-corner,.sc-dh{background:var(--ink);color:#fff;text-align:center;font-weight:700;padding:.35rem 0;border-left:1px solid #444;position:sticky;top:0;z-index:3}
+.sc-times{position:relative;border-right:1px solid var(--line);background:#fafafa}
+.sc-times i{position:absolute;left:0;right:4px;text-align:right;font-style:normal;font-size:.68rem;color:var(--muted);transform:translateY(-.5em)}
+.sc-col{position:relative;border-left:1px solid var(--line);background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 47px,#e6e6e8 47px,#e6e6e8 48px)}
+.sc-blk{position:absolute;overflow:hidden;border-radius:5px;padding:2px 4px;line-height:1.2;color:#111;background:hsl(var(--hue) 70% 90%);border:1px solid hsl(var(--hue) 45% 55%);border-left:4px solid hsl(var(--hue) 55% 42%);z-index:1}
+.sc-blk b{display:block;font-size:.78rem}.sc-blk span{display:block;font-size:.68rem;color:#333}
+.sc-blk.mv{cursor:grab}.sc-blk.mv:active{cursor:grabbing}
+.sc-brk{position:absolute;left:0;right:0;z-index:0;background:repeating-linear-gradient(45deg,#f0f0f1,#f0f0f1 6px,#e2e2e4 6px,#e2e2e4 12px);color:#555;font-size:.68rem;text-align:center;display:flex;align-items:center;justify-content:center;overflow:hidden}
+
+/* printing: only the grid is kept */
+@media print{.sc-bar,.sc-tabs,.sc-scroll{border:0}.sc-grid{min-width:0;font-size:9px}.sc-corner,.sc-dh{position:static;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sc-blk,.sc-brk{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+/* HR leave form (printed) */
+.lf{max-width:820px;margin:0 auto;font-size:12px;color:#000;font-family:"Segoe UI",Arial,sans-serif}
+.lf h1{font-size:15px;text-align:center;margin:.1rem 0}.lf h2{font-size:13px;text-align:center;margin:.1rem 0 .5rem;letter-spacing:.04em}
+.lf .head{display:flex;align-items:center;gap:.7rem;border-bottom:2px solid #b3121f;padding-bottom:.4rem;margin-bottom:.4rem}.lf .head img{width:60px;height:60px;object-fit:contain}.lf .head p{margin:0}
+.lf table{width:100%;border-collapse:collapse;margin:0}.lf td,.lf th{border:1px solid #000;padding:4px 6px;vertical-align:top;text-align:left;font-weight:400}
+.lf th{background:#eee;font-weight:700;text-align:center}.lf .sec{background:#ddd;font-weight:700;text-align:center;letter-spacing:.04em}
+.lf small{display:block;color:#444;font-size:9.5px;margin:0}.lf b{font-weight:700}
+.lf .box{display:inline-block;width:11px;height:11px;border:1px solid #000;margin-right:5px;vertical-align:-1px;text-align:center;line-height:10px;font-size:11px}
+.lf .types{columns:2;column-gap:1rem}.lf .types div{margin:2px 0}
+.lf .sig{height:44px}.lf .line{border-top:1px solid #000;text-align:center;font-weight:700;padding-top:2px}
+.lf .stamp{float:right;border:2px solid #1e7a3c;color:#1e7a3c;padding:2px 10px;font-weight:700;transform:rotate(-6deg);letter-spacing:.1em}
+.lf .stamp.rej{border-color:#b3121f;color:#b3121f}.lf .stamp.pen{border-color:#a15c00;color:#a15c00}

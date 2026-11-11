@@ -1,5 +1,18 @@
 # Revision notes
 
+## NEW (update 4): printable leave form, IT Admin employee registration, class schedule maker
+**To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**. Upload the whole site folder to GitHub again
+(new: `css/schedule.css`, `js/schedule.js`, `js/schedule-view.js`, `js/my-schedule.js`, `js/leave-form.js`, `js/admin-employees.js`, `js/employee-fields.js`; changed: `hr.js`, `admin.js`, `admin.html`, `registrar.html`, `teacher.html`, `student.html`).
+No manual sheet setup: the tabs `scheduleSemesters`, `classSchedules`, `scheduleSettings` are created on first use in your main spreadsheet (no Firebase). Run menu **5** once if you want the new readable tab **Registrar - Class schedule**.
+
+* **HR > Leave > Print form:** an *Application for Leave* is filled in automatically (employee, position, department, dates, days, reason, leave credits used / balance, status stamp, signature lines). Also **Print forms (list below)**, and **Approve and print the form** when approving.
+* **IT Admin > Employee registration:** the IT Admin can register and edit the full employee record (same fields and 2x2 photo as HR), delete employees without an account, and press **Create account** from the list. HR sees these records and a "(by the IT Admin)" line in HR > History.
+* **Registrar > Sections & advisers > Make schedule:** semesters (new / copy / delete), add classes by section, subject, teacher, room, days and time, conflict checks (teacher, room, section), teacher daily hour limit, break times, weekly grid with drag and drop, print (one or all), Excel, subject and room lists.
+* **Send:** the Registrar presses *Send to teachers and students*. Each teacher gets a **Class schedule** tab with his or her own classes; each student gets the schedule of the section they are in. *Withdraw* hides it again. Only one semester is sent at a time.
+
+---
+
+
 ## NEW (update 3): one side panel for every employee page, HR edits the IT Admin's information
 **To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**; upload the whole site folder to GitHub again (new file: `js/sidepanel.js`; changed: all employee pages, `css/style.css`, `js/mobile.js`, `js/leave.js`, `js/hr.js`).
 

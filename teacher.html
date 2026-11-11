@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><script>if(/\.html$/.test(location.pathname))history.replaceState(null,"",location.pathname.replace(/(\/index)?\.html$/,"")+location.search+location.hash)</script>
 <link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>Teacher - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css">
+<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin><title>Teacher - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/schedule.css">
 <style id="pg">@page{margin:10mm}</style>
 <!-- SheetJS: used only to import Excel class lists and to export results to .xlsx -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -17,7 +17,8 @@
 <div class="tabs noprint" id="tabs">
 <button class="btn" data-t="classes">Sections</button><button class="btn" data-t="students">Students</button>
 <button class="btn" data-t="exams">Examinations</button><button class="btn" data-t="modules">Modules</button><button class="btn" data-t="sheet">Answer sheets</button>
-<button class="btn" data-t="scan">Scanner</button><button class="btn" data-t="results">Results</button></div>
+<button class="btn" data-t="scan">Scanner</button><button class="btn" data-t="results">Results</button><button class="btn" data-t="schedule">Class schedule</button></div>
+<section data-s="schedule" hidden><div class="panel" id="myScheduleRoot"><p class="muted">Loading...</p></div></section>
 
 <!-- SECTIONS -->
 <section data-s="classes"><div class="panel"><h2>Sections</h2>
@@ -173,6 +174,7 @@
 </main></div>
 <script type="module" src="js/sidepanel.js"></script>
 <script type="module" src="js/teacher.js"></script>
+<script type="module" src="js/my-schedule.js"></script>
 <script type="module" src="js/leave.js"></script>
 <script src="js/mobile.js" defer></script>
 </body></html>
