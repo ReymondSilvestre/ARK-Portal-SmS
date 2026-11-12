@@ -1,5 +1,26 @@
 # Revision notes
 
+## NEW (update 14): payslip shows SSS / PhilHealth / Pag-IBIG / TIN numbers and the number of holidays; Settings > Payment of holidays
+**To apply:** paste the new `apps-script/Code.gs` (two more readable Payslip columns), publish a **New version** of the deployment, upload the whole site folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets**. Changed: `js/payroll.js`, `js/payroll-calc.js`, `apps-script/Code.gs`. No new sheet tabs.
+
+* **Payslip:** a new line under the employee details shows the employee's **SSS No., PhilHealth No., Pag-IBIG No. and TIN** (from the HR employee record, so fill them in under HR > Edit employee; they are not copied into the saved payslip, they are read when it is printed). The attendance box also shows **No. of holidays** (holidays of the cut-off that fall on a working day; "(1 worked)" when the employee worked on one).
+* **Settings > Holidays:** every holiday now has a type, **Regular holiday** or **Special non-working day**.
+* **Settings > Payment of holidays (new):** per type, **Not worked: paid at __ % of the daily rate** (default 100 = holidays are paid) and **Worked: paid at __ %** (defaults 200 regular, 130 special). Staff and school admins already have the holiday inside the monthly pay (daily rate x working days), so 100 % not worked changes nothing, a lower % deducts the difference (*Unpaid holiday* on the payslip) and a holiday worked adds the extra (*Holiday pay* on the payslip). Hours worked on a holiday that is paid above 100 % are no longer also counted as overtime. Teachers (per hour): a holiday not worked is paid hours a day x rate x the percent (tick box to switch it off), and a holiday worked gets the extra percent on the hours worked.
+* The payroll table shows the number of holidays under the employee's name, Reports include the holiday amounts, and the readable Payslips sheet gets *No. of holidays* and *Holiday pay*.
+
+---
+
+## NEW (update 13): payroll by daily rate (also allowances), attendance on the payslip, upload employees from Excel
+**To apply:** paste the new `apps-script/Code.gs` (only extra columns in the readable Payroll sheets), publish a **New version** of the deployment (Deploy > Manage deployments > pencil > New version > Deploy), upload the whole site folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets**. New file: `js/employee-import.js`. Changed: `js/payroll.js`, `js/payroll-calc.js`, `js/hr.js`, `js/admin-employees.js`, `admin.html`, `apps-script/Code.gs`. No new sheet tabs.
+
+* **Payroll > Add information:** employee staff and school admins now have a **Daily rate**. **Monthly pay = daily rate x working days a month** (Settings > Pay > *Working days a month*, default 22); the monthly pay is shown under the daily rate. Older records that only had a monthly pay still work (the daily rate shown is the monthly pay divided by the working days; it is saved as a daily rate when you save).
+* **Allowances per day:** each allowance row has **per day / per month**. Per day = amount x working days a month (a twice-a-month payroll takes half in each cut-off). Allowances saved before stay *per month*. The allowance is not reduced for absences (only the basic pay is).
+* **Payslip:** the lines now read e.g. *Basic pay (PHP 600.00/day x 11 days)* and *Rice allowance (PHP 50.00/day x 11 days)*, and every payslip has an attendance box: **Daily rate, Days present, Days absent, Overtime (hrs)** (teachers: rate per hour, hours worked, days present, days absent, overtime). Days present come from the biometric DTR (shown as - when no DTR was uploaded); days absent and overtime follow what is in the payroll (including DTR corrections and unpaid leave). Payslips saved before still print (the numbers come from what was saved).
+* **Readable sheets:** *Payroll - Employee pay information* gets *Daily rate* (allowances now list per day / per month); *Payroll - Payslips* gets *Daily rate, Days present, Days absent, Overtime (hours)*.
+* **HR > Add employee** and **IT Admin > Employee registration > Upload from Excel:** download the template, fill one employee per row, choose the file, check the preview (new / already registered / rows with a problem) and press **Import**. Required: Employee No., Last name, First name, Birthday. Rows with a problem are not imported; Employee Nos. already registered are skipped (or updated, if you tick the box; only the filled-in columns change). The 2x2 photo is added later with Edit. Portal account left blank follows the position, as in the form. One line is added to HR > History.
+
+---
+
 ## NEW (update 12): Payroll > Settings > Government benefits: choose the cut-off of each benefit
 **To apply:** upload the site folder to GitHub again (changed: `js/payroll.js`, `js/payroll-calc.js`). No `Code.gs` change.
 

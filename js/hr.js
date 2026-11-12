@@ -31,6 +31,7 @@ const bar = (a, b) => `<span class="bar"><i style="width:${b ? Math.min(100, Mat
 
 /* ---------- what is kept about an employee: js/employee-fields.js (shared with the IT Admin's registration page) ---------- */
 import { STATUSES, TYPES, ACCESS, ACCESS_NAME, DEFAULT_LISTS, FIELDS, GROUPS, POSITION_ACCESS, accessFor } from "./employee-fields.js";
+import { mountEmployeeImport } from "./employee-import.js";   // upload many employees from an Excel file
 
 /* ---------- state ---------- */
 const S = { admins: [], group: "all", photo: "", leave: [], leaveTypes: DEFAULT_LEAVE_TYPES.map((t) => ({ ...t })), emps: [], lists: { positions: [...DEFAULT_LISTS.positions], departments: [...DEFAULT_LISTS.departments] }, log: [], logLoaded: false };
@@ -88,11 +89,12 @@ function control(f, idp = "f_") {
   return `<input ${a} type="${f.type || "text"}" autocomplete="off"${f.max ? ` maxlength="${f.max}"` : ""}>`;
 }
 function renderForm() {
-  sec("add").innerHTML = `<div class="panel"><h2 id="formTitle">Add an employee</h2>
+  sec("add").innerHTML = `<div id="impHost"></div><div class="panel"><h2 id="formTitle">Add an employee</h2>
   <p class="muted" id="formNote">Record every employee here, also those who will never sign in to the portal. If someone needs a portal account, choose it under <b>Portal account</b>: the IT Admin then creates it from this list.</p>
   <form id="empForm" novalidate><h3>Photo</h3><div class="photo-box"><img id="photoPv" class="pv" alt="2x2 photo preview" hidden><div><label>2x2 picture of the employee <small>(JPG or PNG; it is cropped to a square)</small><input type="file" id="photoFile" accept="image/*"></label><button class="btn small" type="button" id="photoDel" hidden>Remove photo</button><p class="muted" id="photoNote"></p></div></div>${GROUPS.map((g) => `<h3>${g}</h3><div class="row">${FIELDS.filter((f) => f.group === g).map((f) => `<label${f.narrow ? ' class="narrow"' : ""}>${f.label}${f.hint ? ` <small>${esc(f.hint)}</small>` : ""}${control(f)}</label>`).join("")}</div>`).join("")}
   <div class="savebar noprint"><button class="btn primary" id="saveBtn">Save employee</button><button class="btn" id="cancelBtn" type="button" hidden>Cancel editing</button></div></form></div>`;
   $("f_status").value = "Active";
+  if (!editing) mountEmployeeImport($("impHost"), { SID, user, byName: profile.displayName, existing: () => new Map(S.emps.map((e) => [e.id, e])), lists: () => S.lists, onDone: async () => { S.logLoaded = false; await refresh(); } });
   setPhoto(editing && editing.photo || "");
   $("photoFile").onchange = (ev) => run(async () => { const f = ev.target.files[0]; if (!f) return; const d = await squarePhoto(f); if (!d) { ev.target.value = ""; return; } setPhoto(d); $("photoNote").textContent = "New photo ready. Press Save to keep it."; });
   $("photoDel").onclick = () => { setPhoto(""); $("photoFile").value = ""; $("photoNote").textContent = "The photo will be removed when you save."; };

@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimes
 import { squarePhoto } from "./photo.js";
 import { showPopup, errText } from "./leave.js";
 import { STATUSES, ACCESS, ACCESS_NAME, DEFAULT_LISTS, FIELDS, GROUPS, accessFor } from "./employee-fields.js";
+import { mountEmployeeImport } from "./employee-import.js";   // upload many employees from an Excel file
 
 const root = document.getElementById("empReg");
 if (root) boot();
@@ -35,9 +36,13 @@ async function boot() {
   function render() {
     root.innerHTML = `<div class="panel"><h2>Employee registration</h2>
       <p class="muted">Register every employee here, with the full information (HR sees the same records). People who will never sign in (a driver, a guard ...) are registered too. When an employee needs a portal account, choose it under <b>Portal account</b> and press <b>Create account</b> in the list.</p>
-      <div class="sc-tabs"><button class="btn${S.view === "form" ? " on" : ""}" data-v="form">${S.editing ? "Edit employee" : "Register an employee"}</button><button class="btn${S.view === "list" ? " on" : ""}" data-v="list">Registered employees (${S.emps.length})</button></div>
+      <div class="sc-tabs"><button class="btn${S.view === "form" ? " on" : ""}" data-v="form">${S.editing ? "Edit employee" : "Register an employee"}</button><button class="btn${S.view === "import" ? " on" : ""}" data-v="import">Upload from Excel</button><button class="btn${S.view === "list" ? " on" : ""}" data-v="list">Registered employees (${S.emps.length})</button></div>
       <div id="aeBody"></div></div>`;
-    S.view === "form" ? form() : list();
+    S.view === "form" ? form() : S.view === "import" ? importView() : list();
+  }
+  function importView() {
+    $("aeBody").innerHTML = '<div id="impHost"></div>';
+    mountEmployeeImport($("impHost"), { SID, user, byName: profile.displayName + " (IT Admin)", extra: { createdByRole: "admin" }, existing: () => new Map(S.emps.map((e) => [e.id, e])), lists: () => S.lists, onDone: async () => { await load(); render(); window.dispatchEvent(new Event("employees-changed")); } });
   }
   const control = (f) => {
     const a = `id="ae_${f.id}" data-f="${f.id}"${f.req ? " required" : ""}`;
@@ -104,7 +109,7 @@ async function boot() {
   }
 
   root.addEventListener("click", (e) => {
-    const v = e.target.closest("button[data-v]"); if (v) { if (v.dataset.v === "form") S.editing = null; S.view = v.dataset.v; if (S.view === "list") return run(async () => { await load(); render(); }); return render(); }
+    const v = e.target.closest("button[data-v]"); if (v) { if (v.dataset.v === "form") S.editing = null; S.view = v.dataset.v; if (S.view === "list" || S.view === "import") return run(async () => { await load(); render(); }); return render(); }
     const b = e.target.closest("button[data-a]"); if (!b) return; const emp = S.emps.find((x) => x.id === b.dataset.id); if (!emp) return;
     if (b.dataset.a === "edit") { S.editing = emp; S.view = "form"; render(); return scrollTo({ top: 0 }); }
     if (b.dataset.a === "acct") { location.hash = "#teachers"; return setTimeout(() => window.dispatchEvent(new CustomEvent("employee-pick", { detail: emp.id })), 50); }

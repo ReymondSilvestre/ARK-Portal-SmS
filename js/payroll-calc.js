@@ -17,6 +17,9 @@ export const DEFAULT_SETTINGS = {
   hdmf: { on: true, mode: "fixed", fixedEe: 0, fixedEr: 0, rate: 2, erRate: 2, cap: 10000 },                                                      // Pag-IBIG: 2% of pay up to the Monthly Fund Salary cap
   tax: { on: true, brackets: [{ over: 0, rate: 0, base: 0 }, { over: 250000, rate: 15, base: 0 }, { over: 400000, rate: 20, base: 22500 }, { over: 800000, rate: 25, base: 102500 }, { over: 2000000, rate: 30, base: 402500 }, { over: 8000000, rate: 35, base: 2202500 }] },   // yearly taxable income
   dtr: { start: "08:00", end: "17:00", lunchMin: 60, graceMin: 10, otStartMin: 30, otBlockMin: 30, halfDayHrs: 4, workDays: [1, 2, 3, 4, 5], restDayAsOt: true, holidays: [], dateOrder: "MDY" },   // Daily Time Record from the biometric file
+  // Payment of holidays (holidays that fall on a working day). % of the DAILY rate: notWorked = paid although nobody worked, worked = paid for a day worked on that holiday.
+  // Fixed-pay employees: the monthly pay (daily rate x working days) already covers the holiday, so 100 / 200 means nothing extra for a holiday not worked and one extra day for a holiday worked.
+  holiday: { regular: { notWorked: 100, worked: 200 }, special: { notWorked: 100, worked: 130 }, teachersPaid: true },
   unpaidLeave: true,              // approved "without pay" leave is deducted automatically
   period: { firstFrom: 1, firstTo: 15, secondFrom: 16, payFirst: 15, paySecond: 0, payWhole: 0 },   // pay periods and the usual pay day (0 = last day of the month); both can still be changed for every payroll
   signatories: [{ label: "Prepared by", name: "", position: "Finance Officer" }, { label: "Approved by", name: "", position: "School Head / Principal" }],   // printed under every payslip (the employee's "Received by" is always first)
@@ -80,6 +83,10 @@ export function cutOfDates(start, end) {
   if (d(start) === 1 && d(end) === l && sm) return "whole";
   return "custom";
 }
+/** Monthly pay of a fixed-pay employee: DAILY RATE x working days a month (Settings). Pay information saved before the daily rate existed keeps its monthly pay. */
+export const monthlyBasicOf = (info, S) => (info && +info.dailyRate > 0 ? r2(+info.dailyRate * (+(S && S.workDays) || 22)) : +(info && info.basicMonthly) || 0);
+/** Monthly amount of one allowance: a daily allowance (perDay) x working days a month; an older allowance is already a monthly amount. */
+export const allowMonthly = (a, S) => (a && a.perDay ? r2((+a.amount || 0) * (+(S && S.workDays) || 22)) : +(a && a.amount) || 0);
 /** A per-hour employee (teachers are paid for the hours they teach, not a fixed daily pay). Saved choice first; without one, a position with teacher / instructor / professor is per hour. */
 export const CATEGORIES = [{ key: "staff", label: "Employee staff", short: "Staff" }, { key: "teacher", label: "Teachers (paid per hour)", short: "Teachers" }, { key: "admin", label: "School admins", short: "School admins" }];
 const TEACHER_RX = /teacher|instructor|professor|faculty/i, ADMIN_RX = /principal|school head|head of school|school admin|director|administrator|president|dean|superintendent|supervisor|coordinator/i;
@@ -136,11 +143,12 @@ export function computeSlip(info, inp, S, period) {
   // per-hour employee (teacher): pay = hours worked x rate for THIS period; no absence / late deduction (only the hours worked are paid).
   // fixed-pay employee: monthly pay (half of it in a twice-a-month payroll) less absences and late.
   const mB = !perHour && i.mBasic !== undefined && i.mBasic !== null && i.mBasic !== "" && !isNaN(+i.mBasic);      // pay of this period typed by hand (administrators)
-  const basic = perHour ? r2(hours * rate) : mB ? r2(+i.mBasic) : r2((+info.basicMonthly || 0) / div);
-  const monthly = perHour || mB ? r2(basic * div) : +info.basicMonthly || 0;      // the monthly equivalent (used by the percent rates and the tax estimate)
-  const daily = monthly / S.workDays, hourly = perHour ? rate : daily / S.hoursPerDay;
+  const baseMonthly = monthlyBasicOf(info, S);
+  const basic = perHour ? r2(hours * rate) : mB ? r2(+i.mBasic) : r2(baseMonthly / div);
+  const monthly = perHour || mB ? r2(basic * div) : baseMonthly;      // the monthly equivalent (used by the percent rates and the tax estimate)
+  const daily = !perHour && !mB && +info.dailyRate > 0 ? +info.dailyRate : monthly / S.workDays, hourly = perHour ? rate : daily / S.hoursPerDay;
   const absentDays = perHour ? 0 : (+i.absentDays || 0) + (+i.leaveDays || 0);
-  const allowList = (info.allowances || []).map((a) => ({ label: a.label, amount: r2((+a.amount || 0) / div) })), allow = r2(allowList.reduce((n, a) => n + a.amount, 0));
+  const allowList = (info.allowances || []).map((a) => ({ label: a.label, amount: r2(allowMonthly(a, S) / div), perDay: !!a.perDay, daily: a.perDay ? r2(+a.amount || 0) : null })), allow = r2(allowList.reduce((n, a) => n + a.amount, 0));
   const ot = r2((+i.otHours || 0) * hourly * S.otRate), otherEarn = r2(+i.otherEarn || 0);
   const absent = perHour ? 0 : r2(absentDays * daily), late = perHour ? 0 : r2(((+i.lateMin || 0) / 60) * hourly);
   const mc = monthlyContrib(monthly, info, S);
@@ -150,7 +158,7 @@ export function computeSlip(info, inp, S, period) {
   const fx = info.fixed || {}, has = (v) => v !== undefined && v !== null && v !== "" && !isNaN(+v) && +v >= 0;
   if (has(fx.tax)) tax = r2(+fx.tax / div);
   else if (info.tax !== false && S.tax.on) {
-    const monthlyAllow = (info.allowances || []).reduce((n, a) => n + (a.taxable === false ? 0 : +a.amount || 0), 0);
+    const monthlyAllow = (info.allowances || []).reduce((n, a) => n + (a.taxable === false ? 0 : allowMonthly(a, S)), 0);
     const taxableYear = Math.max(0, (monthly + monthlyAllow - mc.sssEe - mc.phicEe - mc.hdmfEe) * 12);
     tax = r2(yearlyTax(taxableYear, S.tax.brackets) / 12 / div);
   }
@@ -166,6 +174,18 @@ export function computeSlip(info, inp, S, period) {
   const loans = r2(dedList.reduce((n, d) => n + d.amount, 0)), otherDed = r2(+i.otherDed || 0), other = r2(loans + otherDed);
   // cash advance: the amount taken this pay (never more than the balance) and what is left
   const caBal = r2(Math.max(0, +(info.ca && info.ca.balance) || 0)), caWant = i.caDed !== undefined && i.caDed !== "" ? +i.caDed || 0 : Math.min(+(info.ca && info.ca.perPay) || 0, caBal), caDed = r2(Math.min(Math.max(0, caWant), caBal)), caAfter = r2(caBal - caDed);
-  const gross = r2(basic + allow + ot + otherEarn), totalDed = r2(absent + late + sssF + phicF + hdmfF + taxF + other + caDed), net = r2(gross - totalDed);
-  return { cat: categoryOf(info), perHour, rate, hours, basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe: sssF, phicEe: phicF, hdmfEe: hdmfF, sssEr, phicEr, hdmfEr, tax: taxF, other, dedList, otherDed, caDed, caBal, caAfter, manual, auto: { sssEe, phicEe, hdmfEe, tax }, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0 };
+  // holidays of the period (inp.hol: [{ date, label, type: "regular" | "special", worked, hours }]) paid by the rules under Settings > Payment of holidays
+  const HS = S.holiday || DEFAULT_SETTINGS.holiday, hl = Array.isArray(i.hol) ? i.hol : [], pct = (t, k, def) => (t && t[k] !== undefined && t[k] !== "" && !isNaN(+t[k]) ? +t[k] : def);
+  let holPay = 0, holDed = 0;
+  for (const h of hl) {
+    const sp = h.type === "special", T = sp ? HS.special : HS.regular, nw = pct(T, "notWorked", 100), wk = pct(T, "worked", sp ? 130 : 200);
+    if (h.worked) holPay += perHour ? (+h.hours || 0) * rate * (wk - 100) / 100 : daily * (wk - 100) / 100;            // extra for working on the holiday
+    else if (perHour) { if (HS.teachersPaid !== false) holPay += S.hoursPerDay * rate * nw / 100; }                    // teachers: a holiday not worked is paid at this % of a day
+    else { const x = daily * (nw - 100) / 100; if (x < 0) holDed -= x; else holPay += x; }                           // fixed pay: already in the monthly pay; below 100% = deducted
+  }
+  holPay = r2(holPay); holDed = r2(holDed);
+  const gross = r2(basic + allow + ot + otherEarn + holPay), totalDed = r2(absent + late + holDed + sssF + phicF + hdmfF + taxF + other + caDed), net = r2(gross - totalDed);
+  return { cat: categoryOf(info), perHour, rate, hours, basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe: sssF, phicEe: phicF, hdmfEe: hdmfF, sssEr, phicEr, hdmfEr, tax: taxF, other, dedList, otherDed, caDed, caBal, caAfter, manual, auto: { sssEe, phicEe, hdmfEe, tax }, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0,
+    holidays: hl.length, holWorked: hl.filter((h) => h.worked).length, holPay, holDed, holList: hl.map((h) => ({ date: h.date, label: h.label || "", type: h.type || "regular", worked: !!h.worked })),
+    dailyRate: perHour ? 0 : r2(daily), paidDays: r2((+S.workDays || 0) / div), otHours: r2(+i.otHours || 0), presentDays: i.dtr && i.dtr.present !== undefined && i.dtr.present !== null ? +i.dtr.present : null };
 }
