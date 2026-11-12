@@ -677,15 +677,6 @@ body.has-side .top>.sync{display:none!important}
 @media print{.live-chip{display:none}}
 
 /* ---- Show / hide sections (js/collapse.js) ---- */
-.cx-head{display:block}
-.cx-btn{float:right;margin:0 0 0 .6rem;padding:.12rem .55rem;font:inherit;font-size:.78rem;font-weight:600;line-height:1.4;color:var(--ink,#222);background:#fff;border:1px solid var(--line,#d5d5d8);border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem}
-.cx-btn:hover{border-color:var(--red,#b3121f);color:var(--red,#b3121f)}
-.cx-btn:focus-visible{outline:2px solid var(--red,#b3121f);outline-offset:2px}
-.cx-hid{display:none!important}
-.cx-shut{opacity:.85}
-.cx-bar{display:flex;gap:.4rem;align-items:center;justify-content:flex-end;margin:0 0 .8rem;font-size:.82rem;color:var(--muted,#666)}
-.cx-bar .btn{padding:.15rem .6rem}
-@media print{.cx-btn,.cx-bar{display:none!important}.cx-hid{display:revert!important}}
 
 /* ---------- School Admin: view-only mode (js/viewonly.js) ---------- */
 .vo-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:.2rem 0 .9rem}

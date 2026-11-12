@@ -17,3 +17,14 @@
 .ps small{color:#444;font-size:8.5px}
 .pr-rows .r select{max-width:11rem}.pr-rows .r input:not(.pr-in){flex:1 1 9rem;min-width:7rem}
 .ps .sg{flex-wrap:wrap}.ps .sg div{min-width:22%}
+
+/* Section menu (Settings): a selection menu instead of Hide / Show buttons */
+.pr-card[hidden]{display:none}
+.menu-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;margin:.2rem 0 1.1rem;padding:.75rem 1rem;background:#fafafb;border:1px solid var(--line,#d5d5d8);border-left:4px solid var(--red,#b3121f);border-radius:8px}
+.menu-lbl{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#666)}
+.menu-wrap{position:relative;flex:1 1 18rem;max-width:26rem}
+.menu-wrap:after{content:"";position:absolute;right:1rem;top:50%;width:.5rem;height:.5rem;margin-top:-.35rem;border-right:2px solid var(--red,#b3121f);border-bottom:2px solid var(--red,#b3121f);transform:rotate(45deg);pointer-events:none}
+.menu-select{appearance:none;-webkit-appearance:none;margin:0;width:100%;padding:.6rem 2.4rem .6rem .9rem;font-weight:600;font-size:.95rem;color:var(--ink,#222);background:#fff;border:1px solid #8a8a8e;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.08);cursor:pointer}
+.menu-select:hover{border-color:var(--red,#b3121f)}
+.menu-select:focus-visible{outline:2px solid var(--red,#b3121f);outline-offset:2px}
+@media print{.menu-bar{display:none!important}.pr-card[hidden]{display:block}}
