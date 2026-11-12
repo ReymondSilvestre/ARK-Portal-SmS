@@ -1,5 +1,11 @@
 # Revision notes
 
+## NEW (update 16): Settings > Holiday list
+**To apply:** upload `js/payroll.js` again (no `Code.gs` change).
+* **Holiday list** is now its own section in the Settings menu (it used to sit inside the Biometric DTR card): add a holiday with its date, name and type, remove it, **Clear the list**, and **Load Philippine holidays** for a chosen year (fixed dates, National Heroes Day, Maundy Thursday, Good Friday, Black Saturday). Eid, Chinese New Year and special days declared by the government are added by hand. Press **Save settings** to keep the list.
+
+---
+
 ## NEW (update 15): minimum wage 645 for every employee (adjustable), selection menu instead of Hide / Show buttons
 **To apply:** upload the whole site folder to GitHub again (no `Code.gs` change, no new sheet tabs). Changed: `js/payroll.js`, `js/payroll-calc.js`, `css/payroll.css`, `css/style.css`, every page (`*.html`: the Hide / Show script is no longer loaded). Removed: `js/collapse.js`.
 
