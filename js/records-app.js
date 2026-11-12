@@ -2,6 +2,7 @@
    A page (custodian.js / guidance.js) only describes WHAT it records (kinds of record, their fields, the lists the user can edit, the dashboard);
    this file draws everything: dashboard, add / edit form, records list with filters, student file, history log, settings, Excel downloads.
    Records are stored per school in the collections named in the config and are copied (as plain words) into the readable Records sheet by the server. */
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, deleteDoc, serverTimestamp } from "./db.js";
 import { termRank } from "./omr.js";
@@ -421,4 +422,5 @@ export async function startRecordsApp(cfg) {
   KINDS.forEach((k) => resetForm(k));
   show("dash");
   await refresh();
+  liveRefresh(["registry", "enrollmentRecords", cfg.settingsColl, ...(cfg.kinds || []).map((k) => k.coll).filter(Boolean)], refresh);
 }

@@ -11,7 +11,7 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const homeFor = (role) =>
-  role === "superadmin" ? "superadmin" : role === "admin" ? "admin" : role === "registrar" ? "registrar" : role === "finance" ? "finance" : role === "custodian" ? "custodian" : role === "guidance" ? "guidance" : role === "hr" ? "hr" : role === "staff" ? "staff" : role === "student" ? "student" : "teacher";
+  role === "superadmin" ? "superadmin" : role === "admin" ? "admin" : role === "registrar" ? "registrar" : role === "finance" ? "finance" : role === "payroll" ? "payroll" : role === "custodian" ? "custodian" : role === "guidance" ? "guidance" : role === "hr" ? "hr" : role === "staff" ? "staff" : role === "student" ? "student" : "teacher";
 
 /* ---------- logins ----------
    Students: Exam ID No.                      (no school code)

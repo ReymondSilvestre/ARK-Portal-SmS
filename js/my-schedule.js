@@ -1,7 +1,7 @@
 /* "Class schedule" tab on the Teacher page (the teacher's own classes) and on the Student page (the student's own section).
    Shows what the Registrar has SENT from Registrar > Sections > Make schedule. The server only returns those rows to this person. */
 import { requireRole, db, esc } from "./auth.js";
-import { collection, query, where, getDocs, getDoc, doc } from "./db.js";
+import { collection, query, where, getDocs, getDoc, doc, liveRefresh } from "./db.js";
 import { gridHtml, listHtml, breaksFor, printPages, hours, DAYS, SHORT, byTime } from "./schedule-view.js";
 
 const root = document.getElementById("myScheduleRoot");
@@ -9,7 +9,7 @@ const tab = document.querySelector('#tabs [data-t="schedule"]');
 if (root && tab) {
   const { user, profile, school } = await requireRole(["teacher", "student", "admin"]);
   if (profile.role === "admin") { tab.hidden = true; }                 // the IT Admin does not teach: class schedules are made by the Registrar
-  else load().catch((e) => { console.warn(e); root.innerHTML = `<p class="muted">The class schedule could not be loaded. Try again later.</p>`; });
+  else { load().catch((e) => { console.warn(e); root.innerHTML = `<p class="muted">The class schedule could not be loaded. Try again later.</p>`; }); liveRefresh(["scheduleSemesters", "classSchedules"], () => load()); }
 
   async function load() {
     const SID = profile.schoolId, isStudent = profile.role === "student";
@@ -39,7 +39,7 @@ if (root && tab) {
       <div class="btnbar noprint"><button class="btn primary" id="msPrint" type="button">Print</button></div>
       <div class="sc-scroll">${html}</div><h3 style="margin-top:1rem">List of classes</h3>${listHtml(entries, mode)}`;
     document.getElementById("msPrint").onclick = () => printPages(school, [{ title: isStudent ? `Section ${who}` : who, sub: sem.name, html }]);
-    tab.addEventListener("click", () => { try { localStorage.setItem(SEEN, ver); } catch { } tab.textContent = "Class schedule"; });
+    tab.onclick = () => { try { localStorage.setItem(SEEN, ver); } catch { } tab.textContent = "Class schedule"; };   // (a property, so reloading does not stack listeners)
   }
   function empty(msg) {
     root.innerHTML = `<h2>${profile.role === "student" ? "My class schedule" : "My teaching schedule"}</h2><p class="muted">${esc(msg || "No class schedule has been sent yet. The Registrar sends it when it is ready.")}</p>`;

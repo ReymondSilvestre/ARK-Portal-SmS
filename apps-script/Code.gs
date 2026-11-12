@@ -25,15 +25,15 @@ var KNOWN = ['schools', 'users', 'auditLogs', 'systemSettings', 'counters', 'cla
   'enrollmentRecords', 'registrarSettings', 'registrarLog', 'payments', 'studentAccounts', 'financeSettings', 'financeLog',
   'examinations', 'answerKeys', 'answerSheets', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
   'employees', 'hrSettings', 'hrLog', 'leaveRequests',
-  'scheduleSemesters', 'classSchedules', 'scheduleSettings'];
+  'scheduleSemesters', 'classSchedules', 'scheduleSettings', 'payrollSettings', 'payrollInfo', 'payrollRuns', 'payslips', 'payrollDtr'];
 var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'examKeys', 'examPapers', 'moduleChunks', 'modules',
   'examinations', 'answerKeys', 'answerSheets', 'enrollments', 'teacherLinks', 'classCodes', 'students', 'classes',
   'enrollmentRecords', 'registry', 'registrarSettings', 'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'registrarLog',
   'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
   'employees', 'hrSettings', 'hrLog', 'leaveRequests',
-  'scheduleSemesters', 'classSchedules', 'scheduleSettings'];
+  'scheduleSemesters', 'classSchedules', 'scheduleSettings', 'payrollSettings', 'payrollInfo', 'payrollRuns', 'payslips', 'payrollDtr'];
 /* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
-var EMP_ROLES = ['teacher', 'registrar', 'finance', 'custodian', 'guidance', 'hr', 'staff'];   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
+var EMP_ROLES = ['teacher', 'registrar', 'finance', 'payroll', 'custodian', 'guidance', 'hr', 'staff'];   // 'payroll' = Finance - Payroll officer;   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
 var MANAGED_ROLES = EMP_ROLES.concat(['student']);
 var LEAVE_ROLES = EMP_ROLES.concat(['admin']);   // everyone who can file a leave request to HR
 var ACTOR_TTL = 300;                    // seconds a signed-in person's profile is remembered between requests (was 20)
@@ -273,7 +273,7 @@ function makeS(actor, now) {
   S.live = S.hasProfile && me.status === 'active' && me.mustChangePassword !== true && S.schoolLive;
   S.isSuper = S.live && me.role === 'superadmin'; S.isAdmin = S.live && me.role === 'admin';
   S.isTeacher = S.live && me.role === 'teacher'; S.isRegistrar = S.live && me.role === 'registrar';
-  S.isFinance = S.live && me.role === 'finance'; S.isHR = S.live && me.role === 'hr'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
+  S.isFinance = S.live && me.role === 'finance'; S.isPayroll = S.live && me.role === 'payroll'; S.isHR = S.live && me.role === 'hr'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
   S.get = function (c, id) { return isStr(id) && id ? getDoc(c, id) : null; };
   S.exists = function (c, id) { return !!S.get(c, id); };
   S.validAdviser = function (uid) { var u = S.get('users', uid); return !!u && u.role === 'teacher' && u.schoolId === S.sid; };
@@ -511,6 +511,8 @@ function ownRoleLog(flag) {
     del: function (S) { return S.isSuper; }
   };
 }
+/* ---- Finance - Payroll: pay information per employee, payroll settings, payroll runs and payslips. Only the Payroll account of the school reads or writes them. ---- */
+RULES.payrollSettings = ownRoleSettings('isPayroll'); RULES.payrollInfo = ownRoleRules('isPayroll'); RULES.payrollRuns = ownRoleRules('isPayroll'); RULES.payslips = ownRoleRules('isPayroll'); RULES.payrollDtr = ownRoleRules('isPayroll');   // payrollDtr = the Daily Time Record made from the biometric file (one document per employee per month)
 RULES.custodianRecords = ownRoleRules('isCustodian'); RULES.custodianSettings = ownRoleSettings('isCustodian'); RULES.custodianLog = ownRoleLog('isCustodian');
 RULES.healthRecords = ownRoleRules('isGuidance'); RULES.guidanceRecords = ownRoleRules('isGuidance');
 RULES.guidanceSettings = ownRoleSettings('isGuidance'); RULES.guidanceLog = ownRoleLog('isGuidance');
@@ -521,7 +523,7 @@ function sameAcct(a, b) { return ACCT_FIELDS.every(function (k) { return jeq(a[k
 function photoOk(n) { return !('photo' in n) || n.photo === '' || (isStr(n.photo) && n.photo.length <= 19000 && n.photo.indexOf('data:image/') === 0); }
 /* HR and the IT Admin both register and edit employees (the IT Admin may also fill in the full record, not only the account details). */
 RULES.employees = {
-  read: function (S, d) { return ((S.isHR || S.isAdmin) && S.inMySchool(d)) || S.isSuper; },
+  read: function (S, d) { return ((S.isHR || S.isAdmin || S.isPayroll) && S.inMySchool(d)) || S.isSuper; },   // Payroll reads the employee records (read only)
   create: function (S, id, n) { return (S.isHR || S.isAdmin) && n.schoolId === S.sid && n.createdBy === S.uid && !n.accountUid && id === staffKey(S.sid, n.employeeId) && photoOk(n); },
   update: function (S, id, o, n) { return (S.isHR || S.isAdmin) && S.inMySchool(o) && n.schoolId === S.sid && n.employeeId === o.employeeId && sameAcct(o, n) && photoOk(n); },
   del: function (S, id, o) { return ((S.isHR || S.isAdmin) && S.inMySchool(o) && !o.accountUid) || S.isSuper; }
@@ -537,7 +539,7 @@ RULES.hrSettings.read = function (S, d, id) { return ((S.isHR || (S.live && LEAV
 function leaveFiler(S) { return S.live && LEAVE_ROLES.indexOf(S.me.role) >= 0; }
 function isYmd(v) { return isStr(v) && /^\d{4}-\d{2}-\d{2}$/.test(v); }
 RULES.leaveRequests = {
-  read: function (S, d) { return S.isSuper || (S.isHR && S.inMySchool(d)) || (leaveFiler(S) && d.requesterUid === S.uid); },
+  read: function (S, d) { return S.isSuper || (S.isHR && S.inMySchool(d)) || (S.isPayroll && S.inMySchool(d) && d.status === 'Approved') || (leaveFiler(S) && d.requesterUid === S.uid); },   // Payroll sees approved leave (unpaid days)
   create: function (S, id, n) {
     var okBody = isStr(n.leaveType) && n.leaveType.length > 0 && n.leaveType.length <= 60 && isYmd(n.startDate) && isYmd(n.endDate) && n.endDate >= n.startDate &&
       +n.days > 0 && +n.days <= 366 && (!('reason' in n) || (isStr(n.reason) && n.reason.length <= 1000)) && n.schoolId === S.sid;
@@ -691,13 +693,28 @@ function syncEmpToUser(S, e) {
   ['photo', 'position', 'department'].forEach(function (k) { if (e[k]) u[k] = e[k]; else delete u[k]; });
   putDoc('users', e.accountUid, u); S.touched.push(e.accountUid);
 }
+/* ---- live updates: every save notes the time on the collections it touched (kept in the script cache, one small key per school + collection).
+   Every open page asks "poll" every few seconds; when a number changed, that page reloads the lists it shows. ---- */
+function verKey(sid, coll) { return 'v:' + (sid || '-') + ':' + coll; }
+function bumpVersions(sid, colls) {
+  var t = nowMs(), out = {};
+  try { var c = CacheService.getScriptCache(), o = {}; colls.forEach(function (k) { o[verKey(sid, k)] = String(t); out[k] = t; }); c.putAll(o, 21600); } catch (e) { }
+  return out;
+}
+function pollVersions(actor) {
+  var sid = actor.me.schoolId || '', keys = KNOWN.map(function (k) { return verKey(sid, k); }), got = {}, out = {};
+  try { got = CacheService.getScriptCache().getAll(keys); } catch (e) { }
+  KNOWN.forEach(function (k) { var v = got[verKey(sid, k)]; if (v) out[k] = +v; });
+  return { v: out, now: nowMs() };
+}
 function commit(actor, ops) {
   var S = makeS(actor); S.touched = [];
   try { ops.forEach(function (op) { applyWrite(S, op); }); flushAll(); }
   catch (e) { rollback(); throw e; }
   S.touched.forEach(function (u) { if (u !== '*') dropActor(u); });
   if (S.touched.indexOf('*') >= 0) bumpEpoch();
-  return { ok: true };
+  var seen = {}; ops.forEach(function (o) { seen[o.coll] = 1; }); var vv = bumpVersions(actor.me.schoolId, Object.keys(seen));
+  return { ok: true, v: vv };
 }
 
 /* ============================== actions ============================== */
@@ -902,6 +919,25 @@ function actSetPassword(actor, p) {
     flushAll(); dropActor(t.uid);
   } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
   return { ok: true };
+}
+/** The IT Admin sets passwords for MANY accounts at once (every teacher, every student of one section ...): the birth-year default, or one password they type.
+    Everybody must choose their own new password at the next sign-in. At most 40 accounts per request. */
+function actBulkSetPassword(actor, p) {
+  var S = makeS(actor); if (!S.isAdmin) deny();
+  var uids = Array.isArray(p.uids) ? p.uids.slice(0, 40) : []; if (!uids.length) fail('invalid-argument', 'Choose at least one account.');
+  var lock = LockService.getScriptLock(), done = 0, skipped = []; lock.waitLock(30000);
+  try {
+    uids.forEach(function (uid) {
+      var t = getDoc('users', String(uid)); if (!t || !canManage(actor, t)) { skipped.push(String(uid)); return; }
+      var pw = p.password;
+      if (p.useDefault) { var st = t.role === 'student' ? (getDoc('students', t.studentId) || {}) : t; pw = defaultPassword(st.lastName || String(t.displayName || '').split(',')[0], st.birthday || t.birthday); }
+      if (!pw || (!p.useDefault && !strongEnough(t.role, pw))) { skipped.push(t.displayName || t.uid); return; }
+      authSetPassword(t.uid, pw); t.mustChangePassword = true; t.passwordResetAt = { __ts: nowMs() }; t.updatedAt = { __ts: nowMs() }; putDoc('users', t.uid, t); done++;
+    });
+    logAudit(actor.uid, actor.me.schoolId, 'bulk.temp_password_set', '', { count: done, how: p.useDefault ? 'birth-year default' : 'typed password' });
+    flushAll(); uids.forEach(dropActor);
+  } catch (e) { rollback(); throw e; } finally { lock.releaseLock(); }
+  return { ok: true, done: done, skipped: skipped };
 }
 function actSendReset(actor, p) {
   var S = makeS(actor); if (!S.isAdmin) deny();
@@ -1195,10 +1231,45 @@ var REC = {
       return [rSchool(cx, d.schoolId), d.employeeId, d.lastName, d.firstName, d.middleName || d.middleInitial, rDate(d.birthday), rAge(d.birthday), d.gender, d.civilStatus, d.position, d.department, d.employmentType, rDate(d.dateHired), d.status || 'Active',
         d.contact, d.email, d.address, d.emergencyName, d.emergencyContact, d.sss, d.philhealth, d.pagibig, d.tin, d.prc, d.accountUid ? 'Has an account' : 'No account yet', d.accountRole || '',
         rExtra(d.extra, ((rSettings(cx, 'hrSettings', d.schoolId).fields || {}).employee) || []), rTs(d.updatedAt || d.createdAt)];
+    } },
+  admEmpAcct: { grp: 'admin', src: 'users', tab: 'IT Admin - Employee accounts', wide: [],
+    head: ['School', 'Employee No.', 'Name', 'Account type', 'Position', 'Department', 'Status', 'Email', 'Account created'],
+    row: function (d, id, cx) {
+      if (!d.role || d.role === 'student' || d.role === 'superadmin') return null;
+      return [rSchool(cx, d.schoolId), d.employeeId, d.displayName, d.role === 'admin' ? 'IT Admin' : (REC_ROLE_NAME[d.role] || d.role), d.position, d.department, d.status === 'suspended' ? 'Suspended' : 'Active', d.hasRealEmail ? d.email : '', rTs(d.createdAt)];
+    } },
+  admStuAcct: { grp: 'admin', src: 'users', tab: 'IT Admin - Student accounts', wide: [],
+    head: ['School', 'School year', 'Grade / section', 'Exam ID No.', 'Student name', 'Birthdate', 'Status', 'Email', 'Account created'],
+    row: function (d, id, cx) {
+      if (d.role !== 'student') return null;
+      var st = getDoc('students', d.studentId) || {};
+      return [rSchool(cx, d.schoolId), recSchoolYear(d.createdAt), st.className || '', d.studentId, d.displayName, rDate(d.birthday || st.birthday), d.status === 'suspended' ? 'Suspended' : 'Active', d.hasRealEmail ? d.email : '', rTs(d.createdAt)];
+    } },
+  payInfo: { grp: 'payroll', src: 'payrollInfo', tab: 'Payroll - Employee pay information', wide: [12],
+    head: ['School', 'Employee No.', 'Employee name', 'Position', 'Department', 'Monthly basic pay', 'Pay frequency', 'Allowances (per month)', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Other deductions / loans', 'Status'],
+    row: function (d, id, cx) {
+      var al = (d.allowances || []).reduce(function (a, x) { return a + (+x.amount || 0); }, 0);
+      return [rSchool(cx, d.schoolId), d.employeeId, d.name, d.position, d.department, rMoney(d.basicMonthly), d.frequency === 'semi' ? 'Twice a month' : 'Monthly', rMoney(al), rYN(d.sss !== false), rYN(d.philhealth !== false), rYN(d.pagibig !== false),
+        (d.deductions || []).map(function (x) { return x.label + ': ' + rMoney(x.amount); }).join('; '), d.active === false ? 'Inactive' : 'Active'];
+    } },
+  payRuns: { grp: 'payroll', src: 'payrollRuns', tab: 'Payroll - Payroll runs', wide: [],
+    head: ['School', 'Payroll period', 'From', 'To', 'Pay date', 'Employees', 'Total gross pay', 'Total deductions', 'Total net pay', 'Status', 'Prepared by'],
+    row: function (d, id, cx) { return [rSchool(cx, d.schoolId), d.label, rDate(d.start), rDate(d.end), rDate(d.payDate), d.count, rMoney(d.gross), rMoney(d.deductions), rMoney(d.net), d.status, d.createdByName]; } },
+  payDtr: { grp: 'payroll', src: 'payrollDtr', tab: 'Payroll - DTR summary (biometric)', wide: [],
+    head: ['School', 'Month', 'Employee No.', 'Employee name', 'Days present', 'Days absent', 'Late (minutes)', 'Undertime (minutes)', 'Overtime (hours)', 'Hours worked', 'Days with a missing punch'],
+    row: function (d, id, cx) { var t = d.totals || {}; return [rSchool(cx, d.schoolId), d.month, d.employeeId, d.name, t.present, t.absent, t.late, t.ut, Math.round((t.ot || 0) / 6) / 10, t.hours, t.inc]; } },
+  paySlips: { grp: 'payroll', src: 'payslips', tab: 'Payroll - Payslips', wide: [],
+    head: ['School', 'Payroll period', 'Employee No.', 'Employee name', 'Position', 'Department', 'Basic pay', 'Allowances', 'Overtime', 'Other earnings', 'Gross pay', 'Absences / late', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding tax', 'Loans / other deductions', 'Total deductions', 'NET PAY', 'Status'],
+    row: function (d, id, cx) {
+      return [rSchool(cx, d.schoolId), d.runLabel, d.employeeId, d.name, d.position, d.department, rMoney(d.basic), rMoney(d.allow), rMoney(d.ot), rMoney(d.otherEarn), rMoney(d.gross), rMoney((+d.absent || 0) + (+d.late || 0)), rMoney(d.sssEe), rMoney(d.phicEe), rMoney(d.hdmfEe), rMoney(d.tax), rMoney(d.other), rMoney(d.totalDed), rMoney(d.net), d.status];
     } }
 };
-var REC_GROUPS = { registrar: 'Registrar', finance: 'Finance', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR' };
-var REC_ORDER = ['registrar', 'finance', 'custodian', 'guidance', 'hr'];
+var REC_GROUPS = { registrar: 'Registrar', finance: 'Finance', payroll: 'Finance - Payroll', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR', admin: 'IT Admin' };
+var REC_ORDER = ['registrar', 'finance', 'payroll', 'custodian', 'guidance', 'hr', 'admin'];
+/** Every user type / department has its own book, named "ARK - Important Details - <department>". */
+function recBookTitle(grp) { return 'ARK - Important Details - ' + REC_GROUPS[grp]; }
+var REC_ROLE_NAME = { teacher: 'Teacher', registrar: 'Registrar', finance: 'Finance', payroll: 'Finance - Payroll', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR', staff: 'Other staff' };
+function recSchoolYear(ts) { var ms = tsOf(ts); if (typeof ms !== 'number' || !ms) return ''; var d = new Date(ms), y = d.getFullYear(); return d.getMonth() >= 5 ? y + '-' + (y + 1) : (y - 1) + '-' + y; }
 function recKeysOf(grp) { return Object.keys(REC).filter(function (k) { return REC[k].grp === grp; }); }
 function recIdProp(grp) { return 'RECORDS_ID_' + grp.toUpperCase(); }
 
@@ -1235,7 +1306,8 @@ function recSync(book, key, putIds, delIds, cx) {
   putIds.forEach(function (id) {
     var d = getDoc(def.src, id);
     if (!d) { delIds.push(id); return; }
-    var row = recClean(def.row(d, id, cx), id);
+    var r0 = def.row(d, id, cx); if (!r0) { delIds.push(id); return; }     // this record does not belong on this tab
+    var row = recClean(r0, id);
     if (pos[id]) upd.push({ at: pos[id], row: row }); else add.push(row);
   });
   if (upd.length > 8 && last > 1) {          // many changed rows: read the tab once, change them in memory, write it back once
@@ -1315,7 +1387,7 @@ function recRebuild(book, grp) {
     for (var i = 0; i < ids.length; i++) {
       if (t.deleted[i]) continue;
       var d; try { d = unpack(cellJson(t, i)); } catch (e) { continue; }
-      rows.push(recClean(def.row(d, ids[i], cx), ids[i]));
+      var r0 = def.row(d, ids[i], cx); if (r0) rows.push(recClean(r0, ids[i]));
     }
     var last = sh.getLastRow(); if (last > 1) sh.getRange(2, 1, last - 1, n).clearContent();
     if (rows.length) { recRows(sh, 2, rows.length); var rg = sh.getRange(2, 1, rows.length, n); rg.setNumberFormat('@'); rg.setValues(rows); }
@@ -1328,7 +1400,7 @@ function recReadMe(book, grp) {
   var sh = book.getSheets()[0];
   if (sh.getName() !== 'Read me') { try { sh.setName('Read me'); } catch (e) { } }
   var who = REC_GROUPS[grp], tabs = recKeysOf(grp).map(function (k) { return '  ' + REC[k].tab; });
-  var lines = ['ARK Exam Portal - ' + who + ' records (readable copy)', '',
+  var lines = [recBookTitle(grp), '',
     'This sheet is written for people to read. Every row is one record in plain words.',
     'It is filled in AUTOMATICALLY (within about a minute) each time the ' + who + ' account saves, edits or deletes a record in the portal.',
     '', 'Tabs:'].concat(tabs).concat([
@@ -1336,7 +1408,7 @@ function recReadMe(book, grp) {
     'The last column of every tab (Record ID) is how the portal finds the row. Do not change or delete it.',
     'Use the filter buttons in the first row to search, sort or filter. Use File > Download to get Excel or PDF copies.',
     '', 'PRIVACY: this sheet is for the ' + who + ' account only. Share it (Share > Viewer) only with people allowed to see these records.',
-    grp === 'guidance' ? 'It holds health and counseling information.' : grp === 'hr' ? 'It holds personal and government ID numbers of employees.' : '',
+    grp === 'payroll' ? 'It holds salaries and pay deductions. Share it only with the Payroll officer and the school head.' : grp === 'admin' ? 'It lists the portal accounts (never passwords): employee accounts and student accounts.' : grp === 'guidance' ? 'It holds health and counseling information.' : grp === 'hr' ? 'It holds personal and government ID numbers of employees.' : '',
     'Each school appears in the School column.']);
   sh.clear(); sh.getRange(1, 1, lines.length, 1).setValues(lines.map(function (l) { return [l]; }));
   sh.getRange(1, 1).setFontWeight('bold').setFontSize(14); sh.setColumnWidth(1, 760);
@@ -1349,6 +1421,7 @@ function runCall(actor, c) {
     case 'get': return opGet(makeS(actor), c);
     case 'list': return opList(makeS(actor), c);
     case 'count': return opCount(makeS(actor), c);
+    case 'poll': return pollVersions(actor);
     case 'batch': {
       if (!Array.isArray(c.ops) || c.ops.length > 500) fail('invalid-argument', 'Too many changes at once.');
       var lock = LockService.getScriptLock(), res; lock.waitLock(25000);
@@ -1357,10 +1430,12 @@ function runCall(actor, c) {
       return res;
     }
     case 'fn':
+      bumpVersions(actor.me.schoolId, ['users', 'employees', 'students', 'registry', 'classes', 'enrollmentRecords', 'studentAccounts']);   // account actions change these
       switch (c.name) {
         case 'changePassword': return actChangePassword(actor, c.data || {});
         case 'createAccount': return actCreateAccount(actor, c.data || {});
         case 'adminSetTempPassword': return actSetPassword(actor, c.data || {});
+        case 'adminBulkSetPassword': return actBulkSetPassword(actor, c.data || {});
         case 'adminSendReset': return actSendReset(actor, c.data || {});
         case 'adminDeleteUser': return actDeleteUser(actor, c.data || {});
         case 'registrarDropStudentAccount': return actRegistrarDropStudentAccount(actor, c.data || {});
@@ -1400,7 +1475,7 @@ function doPost(e) {
   catch (err) { _tabs = {}; out = { ok: false, error: { code: err.code || 'internal', message: err.code ? err.message : 'Something went wrong. Please try again.' } }; if (!err.code) console.error(err && err.stack || err); }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
-var CODE_VERSION = 'HR-3';
+var CODE_VERSION = 'HR-4';
 function doGet() { return ContentService.createTextOutput('ARK Exam Portal API is running. Version: ' + CODE_VERSION); }
 
 /* ============================== spreadsheet menu: first-time setup ============================== */
@@ -1465,7 +1540,7 @@ function menuRecordsCreate() {
   var made = [], rep = [];
   REC_ORDER.forEach(function (g) {
     if (prop(recIdProp(g))) return;
-    var book = SpreadsheetApp.create('ARK Exam Portal - ' + REC_GROUPS[g] + ' records (readable copy)');
+    var book = SpreadsheetApp.create(recBookTitle(g));
     setProp(recIdProp(g), book.getId()); made.push(g);
     rep = rep.concat(finishRecords(book, g));
   });
@@ -1476,7 +1551,7 @@ function menuRecordsCreate() {
 }
 function menuRecordsRefresh() {
   var ui = SpreadsheetApp.getUi(), rep = [], any = false;
-  REC_ORDER.forEach(function (g) { var b = recBook(g); if (!b) return; any = true; rep = rep.concat(finishRecords(b, g)); });
+  REC_ORDER.forEach(function (g) { var b = recBook(g); if (!b) return; any = true; try { b.rename(recBookTitle(g)); } catch (e) { } rep = rep.concat(finishRecords(b, g)); });
   if (!any) { ui.alert('Create the readable sheets first (menu item 4).'); return; }
   setProp('RECORDS_STALE', ''); setProp(MQ, '');
   ui.alert('Readable sheets refreshed', groupLinks().join('\n') + '\n\n' + rep.join('\n'), ui.ButtonSet.OK);

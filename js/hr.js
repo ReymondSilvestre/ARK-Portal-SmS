@@ -1,6 +1,7 @@
 /* HR: keeps the information of ALL employees of the school (also people who will never have a portal login).
    Flow:  HR adds the employee here  ->  the IT Admin creates the login from this list  ->  the account shows here as "Has an account".
    Records are stored per school in `employees` and are copied (in plain words) into the HR readable Google Sheet by the server. */
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding, staffKey, defaultStudentPassword } from "./auth.js";
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, deleteField, callFn, Timestamp } from "./db.js";
 import { DEFAULT_LEAVE_TYPES, workingDays, dateText as lvDate, STATUS_CLASS, rangeText, roleName, showPopup, errText } from "./leave.js";
@@ -482,3 +483,6 @@ await refresh();
     html: fresh.slice(0, 6).map((r) => `<p><b>${esc(r.requesterName)}</b> (${esc(roleName(r.requesterRole))})<br>${esc(r.leaveType)}, ${esc(rangeText(r))}, ${esc(r.days)} day${+r.days === 1 ? "" : "s"}${r.reason ? `<br><small>${esc(r.reason)}</small>` : ""}</p>`).join("") + (fresh.length > 6 ? `<p>and ${fresh.length - 6} more...</p>` : ""),
     buttons: [{ label: "Later", value: "later" }, { label: "Review now", value: "go", primary: true }] }).then((a) => { if (a.value === "go") { LV.st = "Pending"; renderLeave(); show("leave"); } });
 })();
+
+/* live updates */
+liveRefresh(["employees", "leaveRequests", "hrSettings", "users"], refresh);

@@ -1,3 +1,4 @@
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, studentEmail, sharedEmail, defaultStudentPassword, ageOf, fullName, applyBranding, cleanEmail, studentKey } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc, deleteField, writeBatch, serverTimestamp, callFn }
   from "./db.js";
@@ -803,3 +804,6 @@ $("xlsx").onclick = () => run(async () => {
 
 show("classes");
 refresh();
+
+/* live updates */
+liveRefresh(["classes", "students", "examinations", "modules", "enrollments"], refresh);

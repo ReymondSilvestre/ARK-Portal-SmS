@@ -1,3 +1,4 @@
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, deleteField, callFn }
   from "./db.js";
@@ -871,3 +872,6 @@ $("rqSetList").onclick = (e) => run(async () => {
 });
 
 refresh();
+
+/* live updates */
+liveRefresh(["registry", "classes", "enrollmentRecords", "registrarSettings", "users"], refresh);

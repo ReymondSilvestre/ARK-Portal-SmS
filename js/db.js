@@ -110,11 +110,11 @@ async function flush() {
    The same list asked twice within READ_TTL (switching tabs, re-opening a screen) is answered from memory instead of a new 1-3 second trip to Google.
    Any save made from THIS browser forgets the remembered lists of the collections it touched (everything, for account actions), so what you just saved is always shown.
    Answers are kept as plain data and decoded for every caller, so a page can change what it receives without affecting anyone else. */
-const READ_TTL = 15000, READS = { get: 1, list: 1, count: 1 };
+const READ_TTL = 90000, READS = { get: 1, list: 1, count: 1 };   // long is safe now: live updates (below) drop a remembered list the moment anybody changes it
 const memo = new Map();                       // key -> { exp, coll, p }
 export const forgetReads = (coll) => { if (!coll) memo.clear(); else for (const [k, v] of memo) if (v.coll === coll) memo.delete(k); };
 export const call = (c) => {
-  if (c.k === "batch") { const colls = new Set((c.ops || []).map((o) => o.coll)); colls.forEach(forgetReads); return enqueue(c).finally(() => colls.forEach(forgetReads)); }
+  if (c.k === "batch") { const colls = new Set((c.ops || []).map((o) => o.coll)); colls.forEach(forgetReads); return enqueue(c).then((r) => { if (r && r.v) absorbVersions(r.v); return r; }).finally(() => colls.forEach(forgetReads)); }
   if (c.k === "fn") return enqueue(c).finally(() => forgetReads());
   if (!READS[c.k]) return enqueue(c);
   const key = JSON.stringify(c), hit = memo.get(key);
@@ -190,4 +190,46 @@ export function writeBatch() {
     commit() { return ops.length ? write(ops).then(() => undefined) : Promise.resolve(); },
   };
   return b;
+}
+
+
+/* ---------- live updates: what somebody else saved appears on every open page by itself ----------
+   Every few seconds (only while the page is open on screen) a tiny request asks the server which lists changed (its answer is a handful of numbers).
+   A list that changed is forgotten from memory and the page that shows it reloads it - unless the person is typing, then it waits.
+   Pages subscribe with liveRefresh(["employees", ...], reloadFunction). Your own saves do not trigger a reload (the server tells us their number). */
+const LIVE = { vers: null, subs: [], timer: null, running: false, fast: 0 };
+function absorbVersions(v) { if (LIVE.vers) Object.assign(LIVE.vers, v); }
+const typing = () => {
+  if (typeof document === "undefined") return false;
+  const a = document.activeElement; if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "file", "range"].includes(a.type)))) return true;
+  return !!document.querySelector("dialog[open], .lv-pop, .ab-veil:not([hidden])");
+};
+export function liveRefresh(colls, fn) {
+  const sub = { colls: new Set(colls), fn, pending: false, t: null };
+  const run = () => { if (document.hidden) { sub.pending = true; return; } if (typing()) { clearTimeout(sub.t); sub.t = setTimeout(run, 3000); return; } sub.pending = false; try { Promise.resolve(fn()).catch(() => {}); } catch { } };
+  sub.fire = () => { clearTimeout(sub.t); sub.t = setTimeout(run, 500); }; sub.run = run;
+  LIVE.subs.push(sub); startLive(); return () => { LIVE.subs = LIVE.subs.filter((x) => x !== sub); };
+}
+async function pollOnce() {
+  const s = getSession(); if (!s || LIVE.running || (typeof document !== "undefined" && document.hidden) || !navigator.onLine) return;
+  LIVE.running = true;
+  try {
+    const res = await post({ action: "multi", token: s.token, calls: [{ k: "poll" }] });
+    const r = res && res.ok && res.results && res.results[0]; if (!r || !r.ok) return;
+    const now = r.data.v || {}, prev = LIVE.vers; LIVE.vers = now;
+    if (!prev) return;
+    const changed = Object.keys(now).filter((k) => prev[k] !== now[k]);
+    if (!changed.length) return;
+    changed.forEach(forgetReads);
+    LIVE.subs.forEach((sub) => { if (changed.some((c) => sub.colls.has(c))) sub.fire(); });
+  } catch { } finally { LIVE.running = false; }
+}
+export function startLive() {
+  if (LIVE.timer || typeof document === "undefined") return;
+  LIVE.act = Date.now();
+  ["pointerdown", "keydown", "touchstart"].forEach((ev) => addEventListener(ev, () => (LIVE.act = Date.now()), { passive: true }));
+  // every 15 s while somebody is using the page, every 45 s when nobody touched it for 2 minutes, nothing while the tab is hidden (keeps the server load small)
+  const loop = async () => { await pollOnce(); LIVE.timer = setTimeout(loop, Date.now() - LIVE.act > 120000 ? 45000 : 15000); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { LIVE.act = Date.now(); pollOnce(); LIVE.subs.forEach((x) => x.pending && x.fire()); } });
+  LIVE.timer = setTimeout(loop, 1500);
 }

@@ -18,7 +18,7 @@ export function workingDays(a, b) {
   for (; d <= e; d.setDate(d.getDate() + 1)) { const w = d.getDay(); if (w !== 0 && w !== 6) n++; }
   return n;
 }
-export const roleName = (r) => ({ admin: "IT Admin", staff: "Staff", teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR" }[r] || r || "");
+export const roleName = (r) => ({ admin: "IT Admin", staff: "Staff", teacher: "Teacher", registrar: "Registrar", finance: "Finance", payroll: "Finance - Payroll", custodian: "Custodian", guidance: "Guidance", hr: "HR" }[r] || r || "");
 export async function loadLeaveTypes(sid) {
   try { const s = await getDoc(doc(db, "hrSettings", sid)); const t = s.exists() && s.data().leaveTypes; if (Array.isArray(t) && t.length) return t; } catch { }
   return DEFAULT_LEAVE_TYPES;
@@ -51,7 +51,7 @@ export function showPopup({ title = "", html = "", ok, buttons, input, validate,
 }
 export const errText = (e) => friendlyError(e) + (e && e.code === "permission-denied" ? " If this keeps happening, make sure the newest Code.gs is deployed in Apps Script (Deploy > Manage deployments > pencil > New version > Deploy)." : "");
 
-const ROLES = ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "staff", "admin"];
+const ROLES = ["teacher", "registrar", "finance", "payroll", "custodian", "guidance", "hr", "staff", "admin"];
 const m = await requireRole(ROLES).catch(() => null);
 if (m) start(m);
 

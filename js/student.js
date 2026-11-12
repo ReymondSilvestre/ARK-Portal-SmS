@@ -1,3 +1,4 @@
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, ageOf, applyBranding } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, writeBatch, deleteDoc, serverTimestamp } from "./db.js";
 import { TERMS, termRank, score, missedText } from "./omr.js";
@@ -294,3 +295,6 @@ function showDone(r) {
 
 try { await loadAll(); } catch (e) { console.error(e); flash(friendlyError(e)); }
 if (S) render();
+
+/* live updates */
+liveRefresh(["students", "enrollments", "teacherLinks", "scanResults"], () => ($("tabs") && $("tabs").hidden ? null : loadAll()));

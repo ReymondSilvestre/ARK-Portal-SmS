@@ -1,3 +1,4 @@
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, applyBranding, ageOf } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, writeBatch, serverTimestamp }
   from "./db.js";
@@ -400,3 +401,6 @@ function renderHistory() {
 $("hiQ").oninput = renderHistory; $("hiRefresh").onclick = () => run(loadHistory);
 
 refresh();
+
+/* live updates */
+liveRefresh(["registry", "enrollmentRecords", "payments", "studentAccounts", "financeSettings"], refresh);

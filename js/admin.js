@@ -1,3 +1,4 @@
+import { liveRefresh } from "./db.js";   // live updates: other users' saves appear here by themselves
 import { requireRole, logout, db, esc, friendlyError, staffEmail, sharedEmail, defaultStudentPassword, fullName, applyBranding, cleanEmail, forgetMe } from "./auth.js";
 import { squarePhoto } from "./photo.js";
 import {
@@ -32,8 +33,8 @@ $("dlgCopy").onclick = () => navigator.clipboard?.writeText($("dlgPw").textConte
 const ask = (text) => confirm(text);
 const lastOf = (t) => t.lastName || String(t.displayName || "").split(",")[0];
 const pwOf = (t) => defaultStudentPassword({ birthday: t.birthday, lastName: lastOf(t) });
-const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", custodian: "Custodian", guidance: "Guidance", hr: "HR", staff: "Other staff" };
-const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", custodian: "custodian", guidance: "guidance", hr: "HR", staff: "other staff", teacher: "faculty / teacher" };
+const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", payroll: "Finance - Payroll", custodian: "Custodian", guidance: "Guidance", hr: "HR", staff: "Other staff" };
+const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", payroll: "finance - payroll", custodian: "custodian", guidance: "guidance", hr: "HR", staff: "other staff", teacher: "faculty / teacher" };
 const userOf = (t) => (t.role === "student" ? t.studentId : t.employeeId);
 
 /* ---------- connection indicator ---------- */
@@ -58,34 +59,86 @@ const logAudit = (action, targetUid, details = {}) =>
   addDoc(collection(db, "auditLogs"), { actorUid: user.uid, schoolId: SID, action, targetUid, details, createdAt: serverTimestamp() });
 
 /* ---------- accounts of this school ---------- */
-let users = [], teachers = [];
+let users = [], teachers = [], stuInfo = new Map(), empRecs = null;
+const syOf = (ts) => { const d = ts?.toDate ? ts.toDate() : null; if (!d) return "Unknown year"; const y = d.getFullYear(); return d.getMonth() >= 5 ? `${y}-${y + 1}` : `${y - 1}-${y}`; };
+const UI = { acc: "emp" };
 async function loadTeachers() {
-  const snap = await getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "custodian", "guidance", "hr", "staff", "student"])));
+  const [snap, st] = await Promise.all([
+    getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "payroll", "custodian", "guidance", "hr", "staff", "student"]))),
+    getDocs(query(collection(db, "students"), where("schoolId", "==", SID))).catch(() => null),
+  ]);
   users = snap.docs.map((d) => d.data()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+  stuInfo = new Map(st ? st.docs.map((d) => [d.id, d.data()]) : []);
   teachers = users.filter((u) => u.role === "teacher");
   renderTeachers();
   $("s-teachers").textContent = teachers.length;
   $("s-active").textContent = teachers.filter((t) => t.status === "active").length;
   $("s-students").textContent = users.filter((u) => u.role === "student").length;
 }
+const rowActions = (t) => { const stu = t.role === "student"; return `
+  <button class="btn small" data-act="toggle" data-uid="${esc(t.uid)}">${t.status === "active" ? "Suspend" : "Reactivate"}</button>
+  ${stu ? "" : `<button class="btn small" data-act="details" data-uid="${esc(t.uid)}">Details</button>`}
+  ${t.hasRealEmail ? `<button class="btn small" data-act="mail" data-uid="${esc(t.uid)}">Email reset link</button>` : ""}
+  <button class="btn small" data-act="reset" data-uid="${esc(t.uid)}">Reset password</button><button class="btn small" data-act="setpw" data-uid="${esc(t.uid)}">Set password</button>
+  ${stu ? "" : `<button class="btn small" data-act="photo" data-uid="${esc(t.uid)}">Change photo</button><button class="btn small" data-act="photodel" data-uid="${esc(t.uid)}">Remove photo</button>`}
+  <button class="btn small danger" data-act="remove" data-uid="${esc(t.uid)}">Remove account</button>`; };
+let shownEmp = [];
 function renderTeachers() {
+  const emps = users.filter((u) => u.role !== "student"), stus = users.filter((u) => u.role === "student");
+  $("nEmp").textContent = emps.length; $("nStu").textContent = stus.length;
+  $("accEmp").hidden = UI.acc !== "emp"; $("accStu").hidden = UI.acc !== "stu";
+  document.querySelectorAll("[data-acc]").forEach((b) => b.classList.toggle("on", b.dataset.acc === UI.acc));
+  /* employees: one table, Employee No. first */
   const q = $("q").value.trim().toLowerCase(), rf = $("roleF").value;
-  const rows = users.filter((t) => (!rf || t.role === rf) && (!q || [t.displayName, t.employeeId, t.studentId].join(" ").toLowerCase().includes(q)));
-  $("teachers").innerHTML = `<tr><th>Name</th><th>Role</th><th>Username</th><th>Status</th><th>Created</th><th></th></tr>` +
-    (rows.length ? rows.map((t) => { const stu = t.role === "student"; return `<tr>
-      <td>${esc(t.displayName)}</td><td>${ROLE_LABEL[t.role] || esc(t.role)}</td>
-      <td>${stu ? "Exam ID No. " + esc(t.studentId) : esc(school.code) + " / " + esc(t.employeeId)}${t.hasRealEmail ? `<small>${esc(t.email)}</small>` : ""}</td>
-      <td><span class="badge ${esc(t.status)}">${esc(t.status)}</span></td><td>${fmt(t.createdAt)}</td>
-      <td class="actions">
-        <button class="btn small" data-act="toggle" data-uid="${esc(t.uid)}">${t.status === "active" ? "Suspend" : "Reactivate"}</button>
-        ${t.hasRealEmail ? `<button class="btn small" data-act="mail" data-uid="${esc(t.uid)}">Email reset link</button>` : ""}
-        ${t.role === "teacher" ? "" : `<button class="btn small" data-act="reset" data-uid="${esc(t.uid)}">Reset password</button>
-        <button class="btn small" data-act="setpw" data-uid="${esc(t.uid)}">Set password</button>`}
-        ${stu ? "" : `<button class="btn small" data-act="photo" data-uid="${esc(t.uid)}">Change photo</button><button class="btn small" data-act="photodel" data-uid="${esc(t.uid)}">Remove photo</button>`}
-        <button class="btn small danger" data-act="remove" data-uid="${esc(t.uid)}">Remove account</button>
-      </td></tr>`; }).join("") : `<tr><td colspan="6">No accounts found.</td></tr>`);
+  shownEmp = emps.filter((t) => (!rf || t.role === rf) && (!q || [t.displayName, t.employeeId, t.position, t.department].join(" ").toLowerCase().includes(q)));
+  $("teachers").innerHTML = `<tr><th>Employee No.</th><th>Name</th><th>Account type</th><th>Position / department</th><th>Status</th><th>Created</th><th></th></tr>` +
+    (shownEmp.length ? shownEmp.map((t) => `<tr><td><b>${esc(t.employeeId)}</b><small>Sign in: ${esc(school.code)} / ${esc(t.employeeId)}</small></td><td>${esc(t.displayName)}${t.hasRealEmail ? `<small>${esc(t.email)}</small>` : ""}</td><td>${ROLE_LABEL[t.role] || esc(t.role)}</td>
+      <td>${esc(t.position || "-")}${t.department ? `<small>${esc(t.department)}</small>` : ""}</td><td><span class="badge ${esc(t.status)}">${esc(t.status)}</span></td><td>${fmt(t.createdAt)}</td><td class="actions">${rowActions(t)}</td></tr>`).join("") : `<tr><td colspan="7">No accounts found.</td></tr>`);
+  /* students: school year > section */
+  const qs = $("qs").value.trim().toLowerCase();
+  const info = (t) => ({ year: syOf(t.createdAt), sec: (stuInfo.get(t.studentId) || {}).className || "No section" });
+  const years = [...new Set(stus.map((t) => info(t).year))].sort().reverse(), yf = $("yearF").value || years[0] || "";
+  $("yearF").innerHTML = `<option value="*">All school years</option>` + years.map((y) => `<option${y === yf ? " selected" : ""}>${esc(y)}</option>`).join("");
+  if (!$("yearF").value) $("yearF").value = "*";
+  const yv = $("yearF").value, secs = [...new Set(stus.filter((t) => yv === "*" || info(t).year === yv).map((t) => info(t).sec))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), sf = $("secF").value;
+  $("secF").innerHTML = `<option value="">All sections</option>` + secs.map((x) => `<option${x === sf ? " selected" : ""}>${esc(x)}</option>`).join("");
+  const list = stus.filter((t) => (yv === "*" || info(t).year === yv) && (!$("secF").value || info(t).sec === $("secF").value) && (!qs || [t.displayName, t.studentId].join(" ").toLowerCase().includes(qs)));
+  const by = {}; list.forEach((t) => { const i = info(t); ((by[i.year] ||= {})[i.sec] ||= []).push(t); });
+  $("studentGroups").innerHTML = Object.keys(by).sort().reverse().map((y) => `<details class="sc-card" open><summary><b>School year ${esc(y)}</b> &middot; ${Object.values(by[y]).reduce((n, l) => n + l.length, 0)} students</summary>` +
+    Object.keys(by[y]).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).map((sec) => { const l = by[y][sec], ids = l.map((t) => t.uid).join(",");
+      return `<details open style="margin:.6rem 0 0 .8rem"><summary><b>${esc(sec)}</b> &middot; ${l.length} students
+        <span class="actions" style="display:inline-flex;margin-left:.6rem"><button class="btn small" data-bulk="default" data-uids="${esc(ids)}" data-label="${esc(sec)}">Default password for this section</button><button class="btn small" data-bulk="custom" data-uids="${esc(ids)}" data-label="${esc(sec)}">Set one password for this section</button></span></summary>
+        <div class="tablewrap"><table><tr><th>Exam ID No.</th><th>Name</th><th>Status</th><th>Created</th><th></th></tr>${l.map((t) => `<tr><td><b>${esc(t.studentId)}</b></td><td>${esc(t.displayName)}${t.hasRealEmail ? `<small>${esc(t.email)}</small>` : ""}</td><td><span class="badge ${esc(t.status)}">${esc(t.status)}</span></td><td>${fmt(t.createdAt)}</td><td class="actions">${rowActions(t)}</td></tr>`).join("")}</table></div></details>`; }).join("") + `</details>`).join("") || `<p class="muted">No student accounts found.</p>`;
 }
-$("q").addEventListener("input", renderTeachers); $("roleF").addEventListener("change", renderTeachers);
+$("q").addEventListener("input", renderTeachers); $("roleF").addEventListener("change", renderTeachers); $("qs").addEventListener("input", renderTeachers);
+$("yearF").addEventListener("change", () => { $("secF").value = ""; renderTeachers(); }); $("secF").addEventListener("change", renderTeachers);
+document.querySelectorAll("[data-acc]").forEach((b) => (b.onclick = () => { UI.acc = b.dataset.acc; renderTeachers(); }));
+
+/* ---------- set the passwords of many accounts at once ---------- */
+async function bulkSet(uids, label, how) {
+  if (!uids.length) return flash("There is no account to change.");
+  let useDefault = how === "default", pw = "";
+  if (how.startsWith("custom-")) { pw = how.slice(7); if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return flash("Use at least 10 characters with a letter and a number."); if (!ask(`Give ALL ${uids.length} listed accounts this password? They must choose their own at the next sign-in.`)) return; }
+  else if (!useDefault) {
+    pw = prompt(`Type ONE password for all ${uids.length} accounts (${label}).\n\nStudents: at least 6 characters. Employees: at least 10, with a letter and a number.\nEveryone must choose their own new password at the next sign-in.`);
+    if (pw === null) return; if (pw.length < 6) return flash("The password is too short.");
+  } else if (!ask(`Set the temporary password (birth year + first letter of the last name) for ${uids.length} accounts (${label})? Their current passwords stop working. Everyone must choose a new one at the next sign-in.`)) return;
+  let done = 0; const skipped = [];
+  for (let i = 0; i < uids.length; i += 40) { const r = await callFn("adminBulkSetPassword", { uids: uids.slice(i, i + 40), useDefault, password: pw }); done += r.done; skipped.push(...(r.skipped || [])); }
+  flash(`Password set for ${done} account${done === 1 ? "" : "s"}.` + (skipped.length ? ` Skipped ${skipped.length} (no birthday on file, or the password was too weak for that account type): ${skipped.slice(0, 6).join(", ")}${skipped.length > 6 ? " ..." : ""}.` : ""), !skipped.length);
+}
+$("bulkEmp").onclick = () => run2(async () => { const how = prompt(`Set the password of the ${shownEmp.length} accounts in the list below.\n\nType 1 = birth-year default (everyone gets their own).\nOr type the password you want everybody to get (at least 10 characters, with a letter and a number).`); if (how === null || !how.trim()) return; await bulkSet(shownEmp.map((t) => t.uid), "listed employees", how.trim() === "1" ? "default" : "custom-" + how.trim()); });
+const run2 = async (fn) => { try { await fn(); } catch (e) { flash(friendlyError(e)); } };
+
+/* the details of an employee (from the employee record, with the Employee No.) */
+async function showDetails(t) {
+  if (!empRecs) empRecs = (await getDocs(query(collection(db, "employees"), where("schoolId", "==", SID)))).docs.map((d) => d.data());
+  const e = empRecs.find((x) => x.employeeId === t.employeeId) || {};
+  const L = (k, v) => (v ? `${k}: ${v}\n` : "");
+  $("dlgBody").style.whiteSpace = "pre-line";
+  popup(`${t.displayName}`, L("Employee No.", t.employeeId) + L("Account type", ROLE_LABEL[t.role] || t.role) + L("Position", e.position || t.position) + L("Department", e.department || t.department) + L("Employment", e.employmentType) + L("Date hired", e.dateHired) + L("Birthday", e.birthday || t.birthday) +
+    L("Contact", e.contact) + L("Email", e.email || (t.hasRealEmail ? t.email : "")) + L("Address", e.address) + L("SSS", e.sss) + L("PhilHealth", e.philhealth) + L("Pag-IBIG", e.pagibig) + L("TIN", e.tin) + (e.employeeId ? "" : "\n(No HR / employee record found. Add it under Employee registration.)"));
+}
 
 /* ---------- employees added by HR who do not have a login yet ---------- */
 let cands = [];
@@ -117,6 +170,7 @@ $("empSel").addEventListener("change", () => {
 });
 $("roleSel").addEventListener("change", renderCandidates);
 /* the Employee registration page tells this page when an employee was added / changed, or when "Create account" was pressed for someone */
+addEventListener("employees-changed", () => { empRecs = null; });
 addEventListener("employees-changed", () => loadCandidates().catch(() => {}));
 addEventListener("employee-pick", (e) => loadCandidates().then(() => { $("empSel").value = e.detail; $("empSel").dispatchEvent(new Event("change")); }).catch(() => {}));
 
@@ -184,7 +238,9 @@ async function removeAccount(u) {
   flash(`${u.displayName} was removed.`, true);
 }
 
-$("teachers").addEventListener("click", async (e) => {
+const onAccClick = async (e) => {
+  const bk = e.target.closest("button[data-bulk]");
+  if (bk) return run2(() => bulkSet(bk.dataset.uids.split(","), bk.dataset.label, bk.dataset.bulk));
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const t = users.find((x) => x.uid === b.dataset.uid); if (!t) return;
   try {
@@ -194,7 +250,7 @@ $("teachers").addEventListener("click", async (e) => {
       await callFn("adminSetPhoto", { uid: t.uid, photo: "" }); flash(`The photo of ${t.displayName} was removed.`, true); return;
     }
     if (b.dataset.act === "remove") { await removeAccount(t); await refresh(); return; }
-    if ((b.dataset.act === "setpw" || b.dataset.act === "reset") && t.role === "teacher") return;
+    if (b.dataset.act === "details") { await showDetails(t); return; }
     if (b.dataset.act === "setpw") { await setCustomPassword(t); return; }
     if (b.dataset.act === "mail") {
       if (!ask(`Send a password-reset link to ${t.email}? ${t.displayName} can then choose a new password from their own inbox.`)) return;
@@ -213,7 +269,8 @@ $("teachers").addEventListener("click", async (e) => {
     }
     await refresh();
   } catch (err) { flash(friendlyError(err)); }
-});
+};
+$("teachers").addEventListener("click", onAccClick); $("studentGroups").addEventListener("click", onAccClick);
 
 async function loadAudit() {
   const snap = await getDocs(query(collection(db, "auditLogs"), where("schoolId", "==", SID), orderBy("createdAt", "desc"), limit(50)));
@@ -320,3 +377,6 @@ function pickPhotoFor(t) {
   };
   inp.click();
 }
+
+/* live updates */
+liveRefresh(["users", "employees", "students", "auditLogs"], refresh);

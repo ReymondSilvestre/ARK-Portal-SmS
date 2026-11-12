@@ -2,7 +2,7 @@
    The IT Admin can register an employee with the SAME full information HR keeps (personal, job, contact, government IDs, 2x2 photo), edit it,
    and then create the portal account from the same page. HR sees every record (and the line "Added by the IT Admin" in HR > History). */
 import { requireRole, db, esc, staffKey, ageOf, friendlyError } from "./auth.js";
-import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimestamp } from "./db.js";
+import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimestamp, liveRefresh } from "./db.js";
 import { squarePhoto } from "./photo.js";
 import { showPopup, errText } from "./leave.js";
 import { STATUSES, ACCESS, ACCESS_NAME, DEFAULT_LISTS, FIELDS, GROUPS, accessFor } from "./employee-fields.js";
@@ -119,4 +119,5 @@ async function boot() {
   });
 
   await load(); render();
+  liveRefresh(["employees", "hrSettings"], async () => { if (S.view === "list" && !S.editing) { await load(); render(); } });
 }

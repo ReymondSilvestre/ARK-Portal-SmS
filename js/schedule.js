@@ -3,7 +3,7 @@
    modelled on the ARK Class Schedule app but stored in THIS portal's Google Sheet (tabs: scheduleSemesters, classSchedules, scheduleSettings)
    - no Firebase. "Send" makes the schedule visible to the teachers (their own classes) and to the students (their own section). */
 import { requireRole, db, esc } from "./auth.js";
-import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, writeBatch, serverTimestamp } from "./db.js";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, writeBatch, serverTimestamp, liveRefresh } from "./db.js";
 import { showPopup, errText } from "./leave.js";
 import { DAYS, SHORT, toMin, toHm, ampm, hours, teacherKey, up, byTime, breaksFor, gridHtml, printPages, exportXlsx } from "./schedule-view.js";
 
@@ -316,4 +316,5 @@ async function boot() {
   const open = () => { if (S.loaded || S.loading) return; S.loading = true; root.innerHTML = `<p class="muted">Loading the schedule...</p>`; run(async () => { await loadBase(); S.loaded = true; render(); }).finally(() => (S.loading = false)); };
   document.addEventListener("click", (e) => { if (e.target.closest('[data-p="scSchedP"]')) open(); });
   if (!root.hidden) open();
+  liveRefresh(["scheduleSemesters", "classSchedules", "classes", "users", "scheduleSettings"], () => (S.loaded ? reload() : null));   // another registrar saved something
 }

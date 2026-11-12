@@ -51,13 +51,19 @@ export function leaveFormHtml(ctx) {
   </table><p style="font-size:9.5px;color:#444;margin-top:4px">Printed from the ARK Portal on ${esc(new Date().toLocaleString())}.</p></div>`;
 }
 
-/** Opens the print window for one or more requests. */
+/** Opens the print window for one or more requests.
+ *  Every request is printed on ONE landscape A4 page, TWO copies side by side: the left half is the HR copy, the right half is the employee's copy. */
 export function printLeaveForms(ctxs, win) {
   const w = win || window.open("", "_blank");
   if (!w) { alert("Your browser blocked the print window. Allow pop-ups for this site and try again."); return; }
   const base = new URL("css/style.css", location.href).href, css = new URL("css/schedule.css", location.href).href;
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Application for Leave</title><link rel="stylesheet" href="${base}"><link rel="stylesheet" href="${css}">
-    <style>@page{size:A4;margin:10mm}body{background:#fff;margin:0}.pg{page-break-after:always}.pg:last-child{page-break-after:auto}.lf .box,.lf th,.lf .stamp{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head>
-    <body>${ctxs.map((c) => `<div class="pg">${leaveFormHtml(c)}</div>`).join("")}<script>addEventListener("load",function(){setTimeout(function(){focus();print()},300)})<\/script></body></html>`);
+    <style>@page{size:A4 landscape;margin:6mm}body{background:#fff;margin:0}.pg{display:flex;gap:0;page-break-after:always;height:196mm;overflow:hidden}.pg:last-child{page-break-after:auto}
+    .half{flex:1 1 50%;width:50%;padding:0 4mm;box-sizing:border-box;position:relative}.half+.half{border-left:1.5px dashed #777}
+    .tag{position:absolute;top:-1mm;right:4mm;font-size:8px;font-weight:700;letter-spacing:.08em;color:#555;text-transform:uppercase}
+    .lf{font-size:9px;max-width:none}.lf h1{font-size:12px}.lf h2{font-size:10px;margin-bottom:.3rem}.lf td,.lf th{padding:2px 4px}.lf small{font-size:7.5px}.lf .head img{width:44px;height:44px}.lf .sig{height:30px}
+    .lf .box,.lf th,.lf .stamp{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head>
+    <body>${ctxs.map((c) => `<div class="pg"><div class="half"><span class="tag">HR copy</span>${leaveFormHtml(c)}</div><div class="half"><span class="tag">Employee copy</span>${leaveFormHtml(c)}</div></div>`).join("")}
+    <script>addEventListener("load",function(){setTimeout(function(){focus();print()},300)})<\/script></body></html>`);
   w.document.close();
 }

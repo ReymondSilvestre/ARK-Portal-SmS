@@ -1,5 +1,32 @@
 # Revision notes
 
+## NEW (update 6): Biometric upload -> automatic DTR -> payroll
+**To apply:** paste the new `apps-script/Code.gs` (new tab `payrollDtr`), publish a New version of the deployment, upload the folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets** (adds the *Payroll - DTR summary (biometric)* tab).
+
+* **Payroll > Biometric / DTR:** upload the export of the biometric machine (Excel, CSV, or text / .dat). The columns (Employee No., date, time, optional time-in / time-out and name) are found automatically and shown for checking. Employees are matched by Biometric ID, then Employee No., then name.
+* The DTR of every employee is made for every day: time in / out, **hours worked, days present, days absent, half day, late, undertime, overtime**, rest day / holiday / approved leave. First punch of the day = IN, last = OUT; a day with only one punch is flagged for correction. You can **correct any time** and the day is recalculated, **recalculate a whole month** after changing the Settings, and **print the DTR** (two copies on one landscape page, like the payslip). Uploading again for the same dates replaces those days.
+* **Payroll:** when a pay period is computed, the absences, late + undertime minutes and overtime hours are filled in from the DTR automatically (and can be changed, or reloaded with *Reload from the biometric DTR*). The payslip shows the attendance summary.
+* **Settings > Biometric DTR:** work start / end, lunch break deducted, grace period for late, when overtime starts and its block size, half-day limit, working days, whether rest-day work counts as overtime, date order of the file (Month/Day or Day/Month), and the list of holidays. Under **Add information** an employee can have a **Biometric ID** and an **own work start / end**.
+
+---
+
+
+## NEW (update 5): Payroll account, live updates, readable "ARK - Important Details" sheets, account lists, passwords
+**To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**. Upload the whole folder to GitHub again.
+Then, in the spreadsheet menu **ARK Portal**, run **4. Create the readable sheets** once (it also renames the old books and creates the new IT Admin and Payroll books) and **5. Refresh the readable sheets**.
+
+* **Readable sheets:** one Google Sheet per user type / department, named **ARK - Important Details - <department>** (Registrar, Finance, Finance - Payroll, Custodian, Guidance, HR, IT Admin). IT Admin book: *Employee accounts* and *Student accounts* (school year, section). Payroll book: pay information, payroll runs, payslips. They are filled in by the background job (about a minute after a save); passwords are never copied.
+* **Live updates:** when somebody saves, every other open page reloads that list by itself (checked every 15 s while the page is in use, 45 s when idle, never while the tab is hidden; it waits while you are typing). Lists are also remembered longer (90 s) so pages open faster, and are forgotten as soon as anything changes.
+* **Online indicator:** only the one under the user's picture is shown now.
+* **HR leave form:** prints as **two copies side by side on one landscape A4 page** (left = HR copy, right = employee copy).
+* **IT Admin > Accounts:** *Employee accounts* (Employee No. first, position, department, **Details** button) and *Student accounts* grouped by **school year, then section**. **Set password** and **Reset password** now work for EVERY account (teachers and students too), plus buttons to set the password of a whole section (birth-year default, or one typed password) or of all listed employees. Everyone must choose a new password at the next sign-in.
+* **IT Admin > Employee registration:** full employee details including the Employee No. (added in update 4); the Accounts list shows the same details.
+* **Finance - Payroll (new account type):** create it under IT Admin > Accounts > *Account type: Finance - Payroll* (the employee needs position "Payroll Officer" or access "Finance - Payroll" in the HR record). Pages: **Dashboard**, **Add information** (monthly pay, allowances, loans, which contributions apply per employee), **Payroll** (automatic computation per pay period: basic, allowances, overtime, absences, late, SSS, PhilHealth, Pag-IBIG, withholding tax, loans; approved *leave without pay* is deducted automatically), **Payslips** (two copies on one landscape page: employee copy left, payroll office copy right), **Reports** (register, by department, SSS / PhilHealth / Pag-IBIG / tax to remit, Excel) and **Settings** (all rates and the tax table).
+  The default rates are the 2026 Philippine rates (SSS 5% employee on a salary credit of 5,000-35,000; PhilHealth 5% shared equally, 10,000-100,000; Pag-IBIG 2% up to 10,000; TRAIN tax table). **Please check them under Payroll > Settings against the latest government circulars before the first payroll.**
+
+---
+
+
 ## NEW (update 4): printable leave form, IT Admin employee registration, class schedule maker
 **To apply:** paste the new `apps-script/Code.gs`, then **Deploy > Manage deployments > pencil > New version > Deploy**. Upload the whole site folder to GitHub again
 (new: `css/schedule.css`, `js/schedule.js`, `js/schedule-view.js`, `js/my-schedule.js`, `js/leave-form.js`, `js/admin-employees.js`, `js/employee-fields.js`; changed: `hr.js`, `admin.js`, `admin.html`, `registrar.html`, `teacher.html`, `student.html`).

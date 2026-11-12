@@ -1,0 +1,17 @@
+/* Finance - Payroll page and the printed payslip */
+.pr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}
+.pr-card{border:1px solid var(--line);border-radius:8px;padding:1rem;background:#fff;margin-bottom:1rem}.pr-card h3{margin:0 0 .6rem;font-size:1.02rem}
+.pr-in{width:7.5rem;text-align:right}.pr-in.sm{width:4.5rem}
+.pr-num{text-align:right;white-space:nowrap}.pr-tot td{font-weight:700;background:#f3f3f4}
+.pr-bar{display:block;height:.55rem;background:#e6e6e8;border-radius:4px;overflow:hidden}.pr-bar i{display:block;height:100%;background:var(--red)}
+.pr-rows{display:grid;gap:.4rem;margin:.4rem 0}.pr-rows .r{display:flex;gap:.5rem;align-items:center}.pr-rows .r input{margin:0}
+.pr-warn{color:#7a0c14;font-weight:600}
+/* payslip (two copies on one landscape page: left = employee, right = payroll office) */
+.ps{font-size:10px;color:#000;font-family:"Segoe UI",Arial,sans-serif}
+.ps .hd{display:flex;align-items:center;gap:.5rem;border-bottom:2px solid #b3121f;padding-bottom:3px;margin-bottom:4px}.ps .hd img{width:42px;height:42px;object-fit:contain}.ps .hd p{margin:0}
+.ps h1{font-size:13px;text-align:center;margin:2px 0;letter-spacing:.1em}
+.ps table{width:100%;border-collapse:collapse}.ps td,.ps th{border:1px solid #000;padding:2px 5px;text-align:left;font-weight:400}.ps th{background:#e9e9ea;font-weight:700;text-align:center}
+.ps .r{text-align:right!important;white-space:nowrap}.ps .tot td{font-weight:700;background:#f2f2f2}
+.ps .net{font-size:14px;font-weight:700;text-align:center;border:2px solid #000;padding:4px;margin:5px 0}
+.ps .sg{display:flex;justify-content:space-between;gap:10px;margin-top:20px;font-size:9px}.ps .sg div{flex:1;border-top:1px solid #000;text-align:center;padding-top:2px}
+.ps small{color:#444;font-size:8.5px}
