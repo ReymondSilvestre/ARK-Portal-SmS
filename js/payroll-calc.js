@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   hoursPerDay: 8,
   otRate: 1.25,                   // overtime = hourly rate x this
   contribTiming: "split",         // older single setting, now only the fallback: each benefit (sss / phic / hdmf) has its own `when`: "split" = half in each cut-off, "first" / "second" = all in that cut-off
+  minWage: { on: true, daily: 645 },   // minimum wage: the lowest DAILY rate paid to any employee (teachers: this / hours a day, per hour). Changeable under Settings > Minimum wage
   adminRange: { min: 0, max: 0 },   // salary range of the school admins (monthly); a pay outside it is flagged, 0 = no limit
   cutoffPair: "B",                // usual cut-off: "A" = 26th-10th and 11th-25th, "B" = 1st-15th and 16th-end (the cut-off can still be chosen for every payroll)
   // Government benefits: mode "fixed" = the same fixed amount a month (employee share / employer share) typed here or per employee under Add information;
@@ -84,7 +85,10 @@ export function cutOfDates(start, end) {
   return "custom";
 }
 /** Monthly pay of a fixed-pay employee: DAILY RATE x working days a month (Settings). Pay information saved before the daily rate existed keeps its monthly pay. */
-export const monthlyBasicOf = (info, S) => (info && +info.dailyRate > 0 ? r2(+info.dailyRate * (+(S && S.workDays) || 22)) : +(info && info.basicMonthly) || 0);
+export const minDaily = (S) => (S && S.minWage && S.minWage.on !== false && +S.minWage.daily > 0 ? +S.minWage.daily : 0);
+/** Daily rate that is really paid: the saved daily rate (or the old monthly pay / working days), never below the minimum wage. */
+export const dailyRateOf = (info, S) => { const w = +(S && S.workDays) || 22, d = info && +info.dailyRate > 0 ? +info.dailyRate : info && +info.basicMonthly > 0 ? r2(+info.basicMonthly / w) : 0; return Math.max(d, minDaily(S)); };
+export const monthlyBasicOf = (info, S) => { const w = +(S && S.workDays) || 22, own = info && +info.dailyRate > 0 ? r2(+info.dailyRate * w) : +(info && info.basicMonthly) || 0; return isHourly(info) ? own : Math.max(own, r2(minDaily(S) * w)); };
 /** Monthly amount of one allowance: a daily allowance (perDay) x working days a month; an older allowance is already a monthly amount. */
 export const allowMonthly = (a, S) => (a && a.perDay ? r2((+a.amount || 0) * (+(S && S.workDays) || 22)) : +(a && a.amount) || 0);
 /** A per-hour employee (teachers are paid for the hours they teach, not a fixed daily pay). Saved choice first; without one, a position with teacher / instructor / professor is per hour. */
@@ -139,14 +143,14 @@ export function monthlyContrib(basicMonthly, info, S) {
  *  info: the pay information; inp: { absentDays, lateMin, otHours, otherEarn, otherDed } typed for this run; leaveDays: unpaid leave days found automatically. */
 export function computeSlip(info, inp, S, period) {
   const semi = S.frequency === "semi" && period.half !== "whole", div = semi ? 2 : 1, i = inp || {};
-  const perHour = !!isHourly(info), rate = perHour ? +info.hourlyRate || 0 : 0, hours = perHour ? r2(+i.hoursWorked || 0) : 0;
+  const perHour = !!isHourly(info), rate = perHour ? Math.max(+info.hourlyRate || 0, minDaily(S) / (+S.hoursPerDay || 8)) : 0, hours = perHour ? r2(+i.hoursWorked || 0) : 0;
   // per-hour employee (teacher): pay = hours worked x rate for THIS period; no absence / late deduction (only the hours worked are paid).
   // fixed-pay employee: monthly pay (half of it in a twice-a-month payroll) less absences and late.
   const mB = !perHour && i.mBasic !== undefined && i.mBasic !== null && i.mBasic !== "" && !isNaN(+i.mBasic);      // pay of this period typed by hand (administrators)
   const baseMonthly = monthlyBasicOf(info, S);
   const basic = perHour ? r2(hours * rate) : mB ? r2(+i.mBasic) : r2(baseMonthly / div);
   const monthly = perHour || mB ? r2(basic * div) : baseMonthly;      // the monthly equivalent (used by the percent rates and the tax estimate)
-  const daily = !perHour && !mB && +info.dailyRate > 0 ? +info.dailyRate : monthly / S.workDays, hourly = perHour ? rate : daily / S.hoursPerDay;
+  const daily = !perHour && !mB ? dailyRateOf(info, S) : monthly / S.workDays, hourly = perHour ? rate : daily / S.hoursPerDay;
   const absentDays = perHour ? 0 : (+i.absentDays || 0) + (+i.leaveDays || 0);
   const allowList = (info.allowances || []).map((a) => ({ label: a.label, amount: r2(allowMonthly(a, S) / div), perDay: !!a.perDay, daily: a.perDay ? r2(+a.amount || 0) : null })), allow = r2(allowList.reduce((n, a) => n + a.amount, 0));
   const ot = r2((+i.otHours || 0) * hourly * S.otRate), otherEarn = r2(+i.otherEarn || 0);

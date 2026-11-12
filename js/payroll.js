@@ -5,7 +5,7 @@
 import { requireRole, logout, db, esc, friendlyError, applyBranding } from "./auth.js";
 import { collection, query, where, getDocs, getDoc, doc, setDoc, writeBatch, serverTimestamp, liveRefresh } from "./db.js";
 import { showPopup } from "./leave.js";
-import { mergeSettings, DEFAULT_SETTINGS, computeSlip, periodOf, customPeriod, payDateOf, weekdaysIn, r2, CUTOFFS, cutoffPeriod, cutOfDates, isHourly, categoryOf, CATEGORIES, monthlyBasicOf, allowMonthly } from "./payroll-calc.js";
+import { mergeSettings, DEFAULT_SETTINGS, computeSlip, periodOf, customPeriod, payDateOf, weekdaysIn, r2, CUTOFFS, cutoffPeriod, cutOfDates, isHourly, categoryOf, CATEGORIES, monthlyBasicOf, allowMonthly, minDaily, dailyRateOf } from "./payroll-calc.js";
 import { parsePunches, detectColumns, buildDays, totalsOf, datesBetween, hm, toMin, DOW } from "./payroll-dtr.js";
 
 const $ = (id) => document.getElementById(id);
@@ -98,8 +98,8 @@ function balancesXls() {
 }
 
 /* ---------- add information (pay information per employee) ---------- */
-const newInfo = (e) => ({ schoolId: SID, employeeKey: e.id, employeeId: e.employeeId, name: nameOf(e), position: e.position || "", department: e.department || "", basicMonthly: 0, dailyRate: 0, category: categoryOf({ position: e.position }), payType: isHourly({ position: e.position }) ? "hourly" : "monthly", hourlyRate: 0, allowances: [], deductions: [], sss: true, philhealth: true, pagibig: true, tax: true, fixed: {}, ca: { balance: 0, perPay: 0, history: [] }, active: true, bank: "", createdBy: user.uid, createdAt: serverTimestamp() });
-const dailyOf = (i) => (+i.dailyRate > 0 ? +i.dailyRate : S.settings.workDays > 0 ? r2((+i.basicMonthly || 0) / S.settings.workDays) : 0);   // the daily rate; older records that only had a monthly pay show it divided by the working days
+const newInfo = (e) => ({ schoolId: SID, employeeKey: e.id, employeeId: e.employeeId, name: nameOf(e), position: e.position || "", department: e.department || "", basicMonthly: r2(minDaily(S.settings) * (+S.settings.workDays || 22)), dailyRate: minDaily(S.settings), category: categoryOf({ position: e.position }), payType: isHourly({ position: e.position }) ? "hourly" : "monthly", hourlyRate: 0, allowances: [], deductions: [], sss: true, philhealth: true, pagibig: true, tax: true, fixed: {}, ca: { balance: 0, perPay: 0, history: [] }, active: true, bank: "", createdBy: user.uid, createdAt: serverTimestamp() });
+const dailyOf = (i) => r2(dailyRateOf(i, S.settings));   // the daily rate paid: the saved one (older records: monthly pay / working days), never below the minimum wage (Settings)
 const catMeta = (k) => CATEGORIES.find((c) => c.key === k) || CATEGORIES[0];
 const outOfRange = (pay) => { const R = S.settings.adminRange || {}, v = +pay || 0; return (+R.min > 0 && v < +R.min) || (+R.max > 0 && v > +R.max); };
 function rInfo() {
@@ -179,6 +179,7 @@ $("pInfo").addEventListener("click", (ev) => run(async () => {
     pullRows(); const f = S.form, e = S.emps.find((x) => x.id === f.employeeKey) || {};
     const patch = { category: $("fPayType").value, payType: $("fPayType").value === "teacher" ? "hourly" : "monthly", hourlyRate: r2(+$("fRate").value), dailyRate: r2(+$("fDaily").value), basicMonthly: r2(+$("fDaily").value * (+S.settings.workDays || 22)), bank: $("fBank").value.trim(), bioId: $("fBio").value.trim(), shiftStart: $("fShS").value, shiftEnd: $("fShE").value, sss: $("fSss").checked, philhealth: $("fPhic").checked, pagibig: $("fHdmf").checked, tax: $("fTax").checked, active: $("fActive").checked, allowances: f.allowances, deductions: f.deductions, fixed: fixedNow(), ca: caNow(f), name: nameOf(e), position: e.position || "", department: e.department || "", updatedAt: serverTimestamp() };
     if (patch.payType === "hourly" ? !(patch.hourlyRate > 0) : !(patch.dailyRate >= 0)) return flash(patch.payType === "hourly" ? "Enter the rate per hour." : "Enter the daily rate.");
+    if (patch.payType !== "hourly" && patch.dailyRate < minDaily(S.settings)) return flash(`The daily rate cannot be lower than the minimum wage of ${money(minDaily(S.settings))} (Settings > Minimum wage).`);
     await setDoc(doc(db, "payrollInfo", f.employeeKey), patch, { merge: true }); S.form = null; await refresh(); flash("Pay information saved.", true);
   }
 }));
@@ -197,7 +198,7 @@ $("pInfo").addEventListener("click", (ev) => run(async () => {
   if (t.id === "payUndo") { S.pendingPay = {}; return rInfo(); }
   if (t.id === "paySave") {
     const ids = Object.keys(S.pendingPay), b = writeBatch(db);
-    for (const id of ids) { const v = r2(+S.pendingPay[id]); if (!(v >= 0)) return flash("One of the pay amounts is not valid."); b.set(doc(db, "payrollInfo", id), { dailyRate: v, basicMonthly: r2(v * (+S.settings.workDays || 22)), updatedAt: serverTimestamp() }, { merge: true }); }
+    for (const id of ids) { const v = r2(+S.pendingPay[id]); if (!(v >= 0)) return flash("One of the pay amounts is not valid."); if (v < minDaily(S.settings)) return flash(`A daily rate cannot be lower than the minimum wage of ${money(minDaily(S.settings))} (Settings > Minimum wage).`); b.set(doc(db, "payrollInfo", id), { dailyRate: v, basicMonthly: r2(v * (+S.settings.workDays || 22)), updatedAt: serverTimestamp() }, { merge: true }); }
     await b.commit(); S.pendingPay = {}; await refresh(); flash("Daily rates saved.", true);
   }
 }));
@@ -598,9 +599,14 @@ const holRow = (d, l, t) => `<div class="r"><input type="date" value="${esc(d ||
 function rSettings() {
   const s = S.settings, wSel = (id, cur) => { const t = cur || s.contribTiming || "split", o = (k, l) => `<option value="${k}"${t === k ? " selected" : ""}>${l}</option>`; return `<label>Deducted in which cut-off?<select id="${id}">${o("split", "Half in each cut-off")}${o("first", "1st cut-off only (1st - 15th or 26th - 10th)")}${o("second", "2nd cut-off only (16th - end or 11th - 25th)")}</select></label>`; }, n = (id, v, step = "0.01") => `<input type="number" id="${id}" step="${step}" value="${v}">`, ck = (id, v) => `<label class="sc-chk"><input type="checkbox" id="${id}"${v ? " checked" : ""}> On</label>`;
   $("pSettings").innerHTML = `<div class="panel"><h2>Settings</h2><p class="muted">These are the rates the automatic computation uses. They start with the current Philippine rates (2026) but the government changes them, so <b>check them with the latest circulars</b>. A school under GSIS can change the rates below (or switch SSS off).</p>
+  <div id="sMenuWrap"></div>
   <div class="pr-card"><h3>Pay</h3><div class="row"><label>Pay frequency<select id="sFreq"><option value="semi"${s.frequency === "semi" ? " selected" : ""}>Twice a month (two cut-offs)</option><option value="monthly"${s.frequency === "monthly" ? " selected" : ""}>Once a month</option></select></label>
     <label>Working days a month <small>(monthly pay = daily rate x this)</small>${n("sDays", s.workDays, "1")}</label><label>Hours a day${n("sHours", s.hoursPerDay, "0.5")}</label><label>Overtime rate <small>(x hourly rate)</small>${n("sOt", s.otRate)}</label>
     <label class="sc-chk" style="margin-top:1.6rem"><input type="checkbox" id="sLeave"${s.unpaidLeave ? " checked" : ""}> Deduct approved leave without pay automatically</label></div></div>
+  <div class="pr-card"><h3>Minimum wage</h3><p class="muted fine">The lowest <b>daily rate</b> paid to every employee. A daily rate below it is not accepted in Add information, and any pay record below it is paid at the minimum wage. Teachers (paid per hour) get at least the minimum wage divided by the hours a day. Change the amount here when the minimum wage changes.</p>
+    <div class="row"><label>Apply the minimum wage${ck("sMwOn", (s.minWage || {}).on !== false)}</label><label>Minimum wage per day (PHP)${n("sMwDaily", (s.minWage || {}).daily)}</label></div>
+    <p class="muted fine" id="sMwNote"></p>
+    <div class="btnbar"><button class="btn" id="sMwApply" type="button" title="Sets the daily rate of every employee who is below the minimum wage (and creates the missing pay records) to the minimum wage">Apply to all employees now</button></div></div>
   <div class="pr-card"><h3>Cut-off and pay date</h3><p class="muted fine">Every payroll can follow one of four cut-offs: <b>26th - 10th</b>, <b>11th - 25th</b>, <b>1st - 15th</b> or <b>16th - end of month</b> (or a whole month, or dates you type). Choose the cut-off on the Payroll tab each time; the pair below is only the one offered first. The pay day starts with these rules and can be changed for every payroll. Use 0 for the pay day to mean the last day of the month.</p>
     <div class="row"><label>Usual cut-offs<select id="sPair"><option value="B"${s.cutoffPair !== "A" ? " selected" : ""}>1st - 15th and 16th - end of month</option><option value="A"${s.cutoffPair === "A" ? " selected" : ""}>26th - 10th and 11th - 25th</option></select></label>
       <label>Pay day of the 1st cut-off <small>(26th - 10th or 1st - 15th)</small>${n("sPayF", s.period.payFirst, "1")}</label><label>Pay day of the 2nd cut-off <small>(11th - 25th or 16th - end)</small>${n("sPayS", s.period.paySecond, "1")}</label><label>Pay day when paid once a month${n("sPayW", s.period.payWhole, "1")}</label></div></div>
@@ -627,6 +633,26 @@ function rSettings() {
   <div class="pr-card"><h3>Signatories printed on the payslip</h3><p class="muted fine">Who signs the payslip: name and position (for example <b>Prepared by</b> - your name - <b>Finance Officer</b>). The employee's "Received by" is always printed first. Up to 3 signatories; the last one is also printed on the DTR. A payroll keeps the signatories it was finalized with.</p>
     <div class="pr-rows" id="sSig">${s.signatories.map((x) => sigRow(x)).join("")}</div><button class="btn small" type="button" id="sSigAdd">Add a signatory</button></div>
   <div class="btnbar"><button class="btn primary" id="sSave" type="button">Save settings</button><button class="btn" id="sReset" type="button">Restore the default rates</button></div></div>`;
+  /* section menu: choose which part of the Settings to work on (nothing is folded; every field stays in the page, so Save settings saves all of them) */
+  (() => {
+    const cards = [...document.querySelectorAll("#pSettings .panel > .pr-card")], title = (c) => (c.querySelector(":scope > h3").childNodes[0].textContent || "").trim();
+    const GROUPS = [["Pay and wages", /^(Pay|Minimum wage|Cut-off|School admins)/], ["Government benefits and tax", /^(Government|SSS|PhilHealth|Pag-IBIG|Withholding)/], ["Attendance and holidays", /^(Biometric|Payment of holidays)/], ["Payslip", /^Signator/]];
+    const grp = GROUPS.map(([g, re]) => [g, cards.map((c, i) => [i, title(c)]).filter(([, t]) => re.test(t))]).filter(([, l]) => l.length);
+    const cur = S.setSec === undefined ? "0" : S.setSec;
+    $("sMenuWrap").innerHTML = `<div class="menu-bar noprint"><label class="menu-lbl" for="sMenu">Settings section</label><div class="menu-wrap"><select id="sMenu" class="menu-select" aria-label="Choose a settings section"><option value="all"${cur === "all" ? " selected" : ""}>All sections</option>${grp.map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(([i, t]) => `<option value="${i}"${cur === String(i) ? " selected" : ""}>${esc(t)}</option>`).join("")}</optgroup>`).join("")}</select></div></div>`;
+    const showSec = (v) => { S.setSec = v; cards.forEach((c, i) => { c.hidden = v !== "all" && String(i) !== v; }); };
+    $("sMenu").onchange = (e) => showSec(e.target.value); showSec($("sMenu").value);
+  })();
+  const mwNote = () => { const d = +$("sMwDaily").value || 0, w = +$("sDays").value || 22, h = +$("sHours").value || 8; $("sMwNote").innerHTML = d > 0 ? `Monthly equivalent: <b>${money(r2(d * w))}</b> (${w} working days) &middot; per hour: <b>${money(r2(d / h))}</b> (${h} hours a day).` : "No minimum wage set."; };
+  ["sMwDaily", "sDays", "sHours"].forEach((id) => $(id).addEventListener("input", mwNote)); mwNote();
+  $("sMwApply").onclick = () => run(async () => {
+    const m = +$("sMwDaily").value || 0; if (!(m > 0)) return flash("Type the minimum wage per day first, then save the settings.");
+    const w = +$("sDays").value || 22, todo = S.emps.filter((e) => { const i = S.info.get(e.id); return !(i && isHourly(i)) && !(i && +i.dailyRate >= m) && !(!i && isHourly({ position: e.position })); });
+    if (!todo.length) return flash(`Every employee is already at or above ${money(m)} a day.`, true);
+    const a = await showPopup({ title: "Apply the minimum wage?", html: `<p><b>${todo.length}</b> employee${todo.length === 1 ? "" : "s"} below ${money(m)} a day will be set to <b>${money(m)}</b> a day (missing pay records are created). Employees already above it, and teachers paid per hour, are not changed.</p>`, buttons: [{ label: "Cancel", value: "no" }, { label: "Apply", value: "yes", primary: true }] }); if (a.value !== "yes") return;
+    for (let k = 0; k < todo.length; k += 400) { const b = writeBatch(db); todo.slice(k, k + 400).forEach((e) => { const i = S.info.get(e.id); if (i) b.set(doc(db, "payrollInfo", e.id), { dailyRate: m, basicMonthly: r2(m * w), updatedAt: serverTimestamp() }, { merge: true }); else b.set(doc(db, "payrollInfo", e.id), { ...newInfo(e), dailyRate: m, basicMonthly: r2(m * w) }); }); await b.commit(); }
+    await refresh(); flash(`${todo.length} employee${todo.length === 1 ? "" : "s"} set to the minimum wage of ${money(m)} a day.`, true);
+  });
   $("sSigAdd").onclick = () => { if (document.querySelectorAll("#sSig .r").length >= 3) return flash("Up to 3 signatories."); $("sSig").insertAdjacentHTML("beforeend", sigRow({ label: "", name: "", position: "" })); };
   $("sSig").onclick = (e) => { const b = e.target.closest("[data-sgrm]"); if (b) b.closest(".r").remove(); };
   $("sHolAdd").onclick = () => $("sHol").insertAdjacentHTML("beforeend", holRow("", ""));
@@ -641,11 +667,12 @@ function rSettings() {
     const per = { ...S.settings.period, payFirst: v("sPayF"), paySecond: v("sPayS"), payWhole: v("sPayW") };
     if (["hRegN", "hRegW", "hSpN", "hSpW"].some((id) => !(v(id) >= 0))) return flash("The holiday percents cannot be negative.");
     if ([per.payFirst, per.paySecond, per.payWhole].some((x) => !(x >= 0 && x <= 31))) return flash("A pay day must be 0 (last day of the month) or a day from 1 to 31.");
+    if (!(v("sMwDaily") >= 0)) return flash("The minimum wage cannot be negative.");
     if (v("sAdMax") > 0 && v("sAdMax") < v("sAdMin")) return flash("The highest school admin pay must be higher than the lowest.");
     if (["sSssFe", "sSssFr", "sPhFe", "sPhFr", "sHdFe", "sHdFr"].some((id) => !(v(id) >= 0))) return flash("A fixed amount cannot be negative.");
     const signatories = [...document.querySelectorAll("#sSig .r")].map((r) => { const g = (k) => r.querySelector(`[data-sg="${k}"]`).value.trim(); return { label: g("label"), name: g("name"), position: g("position") }; }).filter((x) => x.label || x.name || x.position);
     if (!signatories.length) return flash("Add at least one signatory (for example Prepared by - your name - Finance Officer).");
-    const data = { schoolId: SID, frequency: $("sFreq").value, cutoffPair: $("sPair").value, adminRange: { min: v("sAdMin"), max: v("sAdMax") }, workDays: v("sDays"), hoursPerDay: v("sHours"), otRate: v("sOt"), contribTiming: S.settings.contribTiming || "split", unpaidLeave: c("sLeave"),
+    const data = { schoolId: SID, frequency: $("sFreq").value, cutoffPair: $("sPair").value, adminRange: { min: v("sAdMin"), max: v("sAdMax") }, minWage: { on: c("sMwOn"), daily: v("sMwDaily") }, workDays: v("sDays"), hoursPerDay: v("sHours"), otRate: v("sOt"), contribTiming: S.settings.contribTiming || "split", unpaidLeave: c("sLeave"),
       sss: { on: c("sSssOn"), when: $("sSssW").value, mode: $("sSssM").value, fixedEe: v("sSssFe"), fixedEr: v("sSssFr"), rate: v("sSssR"), erRate: v("sSssE"), ec: v("sSssEc"), min: v("sSssMin"), max: v("sSssMax"), step: 500 }, phic: { on: c("sPhOn"), when: $("sPhW").value, mode: $("sPhM").value, fixedEe: v("sPhFe"), fixedEr: v("sPhFr"), rate: v("sPhR"), employeeShare: v("sPhS"), min: v("sPhMin"), max: v("sPhMax") },
       hdmf: { on: c("sHdOn"), when: $("sHdW").value, mode: $("sHdM").value, fixedEe: v("sHdFe"), fixedEr: v("sHdFr"), rate: v("sHdR"), erRate: v("sHdE"), cap: v("sHdCap") }, tax: { on: c("sTxOn"), brackets }, dtr: { start: $("dStart").value || "08:00", end: $("dEnd").value || "17:00", lunchMin: v("dLunch"), graceMin: v("dGrace"), otStartMin: v("dOtS"), otBlockMin: Math.max(5, v("dOtB")), halfDayHrs: v("dHalf"), dateOrder: $("dOrder").value, restDayAsOt: c("dRest"), workDays: [...document.querySelectorAll("[data-wd]:checked")].map((x) => +x.dataset.wd),
         holidays: [...document.querySelectorAll("#sHol .r")].map((r) => { const i = r.querySelectorAll("input"); return { date: i[0].value, label: i[1].value.trim(), type: r.querySelector("select").value }; }).filter((h) => h.date) }, holiday: { regular: { notWorked: v("hRegN"), worked: v("hRegW") }, special: { notWorked: v("hSpN"), worked: v("hSpW") }, teachersPaid: c("hTeach") }, period: per, signatories, updatedAt: serverTimestamp() };
