@@ -1,5 +1,15 @@
 # Revision notes
 
+## NEW (update 9): show / hide sections on every page, payroll cut-offs, teachers paid per hour, government benefits as fixed amounts
+**To apply:** upload the whole site folder to GitHub again (new file: `js/collapse.js`; changed: `css/style.css`, `js/payroll.js`, `js/payroll-calc.js` and every page's `.html`). `apps-script/Code.gs` only got extra columns in the readable Payroll sheets (Pay type, Rate per hour, Hours worked): paste it, publish a New version of the deployment and run menu **ARK Portal > 5. Refresh the readable sheets**. No new tabs.
+
+* **Show / hide on every page:** each section heading (panel, card, form group) has a small **Hide / Show** button that folds everything under it, up to the next heading. A **Show all / Hide all** bar sits at the top of the page (it acts on the tab you are looking at). What you folded is remembered while the page is open, also when the page redraws. Printing always shows everything.
+* **Payroll > Payroll > Cut-off:** choose **26th - 10th**, **11th - 25th**, **1st - 15th** or **16th - 30th / 31st** (or a whole month, or other dates typed by hand). The dates and the pay day fill in by themselves and can still be changed. For 26th - 10th the *Month* is the month the cut-off ends in (Month = Nov 2026 gives Oct 26 - Nov 10). **Settings > Cut-off and pay date** sets which pair is offered first (26-10 / 11-25 or 1-15 / 16-end) and the pay days.
+* **Teachers are calculated separately, per hour:** under **Add information** every employee is either *Fixed monthly pay* or *Per hour* with a **rate per hour** (a position with Teacher / Instructor / Professor / Faculty is Per hour until you choose otherwise). In the payroll the teachers have their own table: **hours worked x rate per hour** = basic pay (hours come from the biometric DTR, regular hours only, and can be corrected in the payroll). No daily rate, no absence or late deduction; overtime hours are paid on top at the overtime rate. Everyone else stays in the fixed monthly table. Each table has its own totals, plus a grand total. The payslip shows *Teaching pay (hours x rate)*.
+* **Government benefits (Settings):** SSS, PhilHealth and Pag-IBIG each have **Fixed amount (a month)** or **Percent of the pay**. **Fixed amount is now the default.** Type the employee share and employer share per month in the Settings. An amount typed for one employee under Add information still replaces it, and every payroll can still overtype it. **Check that the fixed amounts are filled in (they start at 0).** Withholding tax is unchanged.
+
+---
+
 ## NEW (update 8): update notice only, editable DTR / pay period / pay date, signatories, manual government amounts, cash advance and loans
 **To apply:** paste the new `apps-script/Code.gs` (only the readable Payroll sheet columns changed), publish a New version of the deployment, upload the folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets**. No new tabs: everything is stored in the existing `payrollInfo`, `payrollRuns`, `payslips`, `payrollDtr` and `payrollSettings` tabs.
 
