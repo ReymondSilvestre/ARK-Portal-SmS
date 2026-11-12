@@ -28,3 +28,4 @@
 .menu-select:hover{border-color:var(--red,#b3121f)}
 .menu-select:focus-visible{outline:2px solid var(--red,#b3121f);outline-offset:2px}
 @media print{.menu-bar{display:none!important}.pr-card[hidden]{display:block}}
+.ps td.bal{font-size:8.5px;color:#444;background:#fafafa}.ps td.bal i{font-style:italic}
