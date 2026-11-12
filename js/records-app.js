@@ -24,7 +24,7 @@ const emptyRow = (n, t) => `<tr><td colspan="${n}">${t}</td></tr>`;
 const slugName = (s) => String(s).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "records";
 
 export async function startRecordsApp(cfg) {
-  const { user, profile, school } = await requireRole([cfg.role]);
+  const { user, profile, school } = await requireRole([cfg.role, "schooladmin"]);   // the School Admin opens this page view-only (js/viewonly.js)
   const SID = profile.schoolId;
   $("who").textContent = `${profile.displayName} (${cfg.title})`; $("out").onclick = logout;
   applyBranding(school);

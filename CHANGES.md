@@ -1,5 +1,16 @@
 # Revision notes
 
+## NEW (update 11): School Admin account (view only), "School admins" wording in Payroll
+**To apply:** paste the new `apps-script/Code.gs`, publish a **New version** of the deployment (Deploy > Manage deployments > pencil > New version > Deploy), and upload the whole site folder to GitHub again.
+New: `schooladmin.html`, `js/schooladmin.js`, `js/viewonly.js`. Changed: `Code.gs`, `css/style.css`, `js/auth.js`, `js/db.js`, `js/admin.js`, `js/leave.js`, `js/employee-fields.js`, `js/payroll.js`, `js/payroll-calc.js`, `js/registrar.js`, `js/finance.js`, `js/hr.js`, `js/records-app.js`, `admin.html`, `change-password.html`, `registrar.html`, `finance.html`, `hr.html`, `payroll.html`, `custodian.html`, `guidance.html`. No new sheet tabs.
+
+* **Payroll wording:** "School administrators" is now **"School admins"** everywhere in Payroll (group name, tables, Settings > *School admins salary range*, messages).
+* **IT Admin creates School Admin accounts:** same way as every other employee. HR adds the person first (account type **School Admin**; the position **School Admin** picks it automatically), then IT Admin > Accounts > Account type **School Admin (view only)** > Create. Sign-in: school code + Employee No., temporary password = birth year + first letter of the last name. The IT Admin can filter (*School Admins only*), set / reset the password, suspend and delete these accounts like the others.
+* **School Admin sees everything, changes nothing:** after sign-in the School Admin gets an **Overview** page with the departments **Registrar, Finance, Payroll, HR, Custodian and Guidance**, and a department bar on every page. Each department opens the *same* dashboard and reports the department staff see (Registrar: Dashboard, Registration masterlist, Enrolled masterlist. Finance: Dashboard, Payment transactions, Enrolled masterlist, Student balances. Payroll: Dashboard, Reports. HR: Dashboard, Employees, Leave. Custodian: Dashboard, Records, Student file, Monitoring. Guidance: Dashboard, Records, Student file). Forms, settings and history tabs and the edit / delete buttons are not shown.
+* **It is really view only:** `Code.gs` gives this role *read* access to the school's data and no create / update / delete rule at all, and `db.js` also refuses every save from this account. The only things a School Admin can still do are file **their own leave request** and **change their own password**.
+* Also fixed: the *Other staff* and *School Admin* accounts can now use the change-password page (Other staff was missing from its list).
+
+---
 ## NEW (update 10): payroll in three separate groups
 **To apply:** upload the site folder to GitHub again (changed: `js/payroll.js`, `js/payroll-calc.js`). No `Code.gs` change.
 

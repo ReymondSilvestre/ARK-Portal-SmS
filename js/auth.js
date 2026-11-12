@@ -11,7 +11,7 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 export const homeFor = (role) =>
-  role === "superadmin" ? "superadmin" : role === "admin" ? "admin" : role === "registrar" ? "registrar" : role === "finance" ? "finance" : role === "payroll" ? "payroll" : role === "custodian" ? "custodian" : role === "guidance" ? "guidance" : role === "hr" ? "hr" : role === "staff" ? "staff" : role === "student" ? "student" : "teacher";
+  role === "superadmin" ? "superadmin" : role === "admin" ? "admin" : role === "registrar" ? "registrar" : role === "finance" ? "finance" : role === "payroll" ? "payroll" : role === "custodian" ? "custodian" : role === "guidance" ? "guidance" : role === "hr" ? "hr" : role === "schooladmin" ? "schooladmin" : role === "staff" ? "staff" : role === "student" ? "student" : "teacher";
 
 /* ---------- logins ----------
    Students: Exam ID No.                      (no school code)
@@ -94,7 +94,7 @@ const fetchMe = async () => {
 /** `who` = email (IT admin / Super Admin), Employee No. (teacher, needs `school`) or Exam ID No. (student, no school). */
 export async function login(who, password, school) {
   const r = await rpc("login", { who: who.trim(), password, school: school || "" });
-  setSession({ token: r.token, exp: r.exp, uid: r.uid });
+  setSession({ token: r.token, exp: r.exp, uid: r.uid, role: r.profile && r.profile.role });   // the role is kept so db.js can block every write of a view-only School Admin
   saveMe({ profile: r.profile, school: r.school }); meCache = decode({ profile: r.profile, school: r.school });
   return { user: { uid: r.uid } };
 }

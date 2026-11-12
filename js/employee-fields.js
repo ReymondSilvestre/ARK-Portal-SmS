@@ -2,10 +2,10 @@
 /* ---------- what is kept about an employee ---------- */
 export const STATUSES = ["Active", "On leave", "Resigned", "Retired", "Terminated"];
 export const TYPES = ["Regular", "Probationary", "Contractual", "Part-time", "Substitute"];
-export const ACCESS = [["", "No portal account needed"], ["teacher", "Faculty / Teacher"], ["registrar", "Registrar"], ["finance", "Finance"], ["payroll", "Finance - Payroll"], ["custodian", "Custodian"], ["guidance", "Guidance"], ["hr", "HR"], ["staff", "Other staff (principal, librarian, nurse, guard, driver ...)"]];
+export const ACCESS = [["", "No portal account needed"], ["teacher", "Faculty / Teacher"], ["registrar", "Registrar"], ["finance", "Finance"], ["payroll", "Finance - Payroll"], ["custodian", "Custodian"], ["guidance", "Guidance"], ["hr", "HR"], ["schooladmin", "School Admin (principal / school head - view only)"], ["staff", "Other staff (principal, librarian, nurse, guard, driver ...)"]];
 export const ACCESS_NAME = Object.fromEntries(ACCESS.filter(([k]) => k).map(([k, v]) => [k, v])); ACCESS_NAME.admin = "IT Admin";
 export const DEFAULT_LISTS = {
-  positions: ["Teacher", "Head Teacher", "Principal", "Registrar", "Cashier / Finance Officer", "Payroll Officer", "Guidance Counselor", "Custodian", "School Nurse", "HR Officer", "IT Administrator", "Librarian", "Security Guard", "Janitor / Utility", "Driver", "Other"],
+  positions: ["Teacher", "Head Teacher", "Principal", "School Admin", "Registrar", "Cashier / Finance Officer", "Payroll Officer", "Guidance Counselor", "Custodian", "School Nurse", "HR Officer", "IT Administrator", "Librarian", "Security Guard", "Janitor / Utility", "Driver", "Other"],
   departments: ["Elementary", "Junior High School", "Senior High School", "Administration", "Finance", "Registrar's Office", "Guidance", "Clinic", "Maintenance", "Security", "IT"],
 };
 export const FIELDS = [
@@ -35,5 +35,5 @@ export const FIELDS = [
 ];
 export const GROUPS = ["Basic", "Job", "Contact", "Government IDs"];
 /* the account type every position needs: the special pages for the offices below, "Other staff" for everybody else */
-export const POSITION_ACCESS = { "Teacher": "teacher", "Head Teacher": "teacher", "Registrar": "registrar", "Cashier / Finance Officer": "finance", "Payroll Officer": "payroll", "Guidance Counselor": "guidance", "Custodian": "custodian", "HR Officer": "hr" };
+export const POSITION_ACCESS = { "Teacher": "teacher", "Head Teacher": "teacher", "Registrar": "registrar", "Cashier / Finance Officer": "finance", "Payroll Officer": "payroll", "Guidance Counselor": "guidance", "Custodian": "custodian", "HR Officer": "hr", "School Admin": "schooladmin" };
 export const accessFor = (pos) => (pos ? POSITION_ACCESS[pos] || "staff" : "");

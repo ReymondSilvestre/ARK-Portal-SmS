@@ -8,7 +8,7 @@ import { DEFAULT_LEAVE_TYPES, workingDays, dateText as lvDate, STATUS_CLASS, ran
 import { printLeaveForms } from "./leave-form.js";   // the printable Application for Leave   // also puts the "Leave request" button (HR files its own leave too) in the top bar
 
 const $ = (id) => document.getElementById(id);
-const { user, profile, school } = await requireRole(["hr"]);
+const { user, profile, school } = await requireRole(["hr", "schooladmin"]);   // the School Admin opens this page view-only (js/viewonly.js)
 const SID = profile.schoolId;
 $("who").textContent = `${profile.displayName} (HR)`; $("out").onclick = logout;
 applyBranding(school);

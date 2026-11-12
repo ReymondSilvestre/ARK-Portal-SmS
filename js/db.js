@@ -126,7 +126,11 @@ export const call = (c) => {
 /** Wakes the server up (Google puts an idle script to sleep; the first request after a pause is the slow one). Called while the sign-in form is still being filled in. */
 export const warmUp = () => { try { post({ action: "ping" }).catch(() => {}); } catch { } };
 /** Server-side actions (create an account, set a password, delete a school ...). */
-export const callFn = (name, data) => enqueue({ k: "fn", name, data: data || {} });
+/* The School Admin account is VIEW ONLY: every save is refused here (and by the server, which is the real lock).
+   Only the School Admin's own leave requests and own password change are allowed. */
+const viewOnly = () => { const s = getSession(); return !!s && s.role === "schooladmin"; };
+const VIEW_ONLY_MSG = "View only: the School Admin can see everything but cannot add, change or delete records.";
+export const callFn = (name, data) => (viewOnly() && name !== "changePassword" ? Promise.reject(err({ code: "view-only", message: VIEW_ONLY_MSG })) : enqueue({ k: "fn", name, data: data || {} }));
 // Same shape as the Cloud Functions the pages used before.
 export const getFunctions = () => ({});
 export const httpsCallable = (_f, name) => (data) => callFn(name, data).then((d) => ({ data: d }));
@@ -176,7 +180,7 @@ export async function getCountFromServer(q) {
   const r = await call({ k: "count", ...qpart(col) });
   return { data: () => ({ count: r.count }) };
 }
-const write = (ops) => call({ k: "batch", ops });
+const write = (ops) => (viewOnly() && !ops.every((o) => o.coll === "leaveRequests") ? Promise.reject(err({ code: "view-only", message: VIEW_ONLY_MSG })) : call({ k: "batch", ops }));
 export const setDoc = (ref, data, opts) => write([{ op: "set", coll: ref.coll, id: ref.id, data: encode(data), merge: !!(opts && opts.merge) }]).then(() => undefined);
 export const updateDoc = (ref, data) => write([{ op: "update", coll: ref.coll, id: ref.id, data: encode(data) }]).then(() => undefined);
 export const deleteDoc = (ref) => write([{ op: "delete", coll: ref.coll, id: ref.id }]).then(() => undefined);

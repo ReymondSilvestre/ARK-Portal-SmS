@@ -64,6 +64,9 @@ Apps Script > **Deploy > Manage deployments > pencil > Version: New version > De
 3. The **IT Admin** opens Accounts, chooses the employee from HR's list and the account type, and creates the login. The IT Admin only sees name, Employee No., birthday and position, never the HR details.
 4. The login is linked to the HR record. HR sees **Has an account**; removing the account keeps the employee in the HR records. An employee who has an account cannot be deleted from HR until the account is removed.
 
+## School Admin (view only)
+The IT Admin creates a **School Admin** account for the principal / school head (HR adds the person first, account type *School Admin*, then IT Admin > Accounts > Account type *School Admin (view only)*). The School Admin opens an **Overview** page and can view the dashboards and reports of the Registrar, Finance, Payroll, HR, Custodian and Guidance, but cannot add, edit or delete anything (it can only file its own leave request and change its own password). Deploy the new `Code.gs` for this to work.
+
 ## Side panel (all employee pages)
 Every employee page (IT Admin, teacher, registrar, finance, custodian, guidance, HR, other staff) has the same left side panel: photo, account name, position and department, the page menu, **Leave request** and **Sign out**. The school logo and name are in the upper centre. HR edits the IT Admin's name, position, department, contact and photo under **HR > IT Admin**.
 

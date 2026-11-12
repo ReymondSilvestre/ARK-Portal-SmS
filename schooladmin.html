@@ -1,0 +1,33 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><script>if(/\.html$/.test(location.pathname))history.replaceState(null,"",location.pathname.replace(/(\/index)?\.html$/,"")+location.search+location.hash)</script>
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="favicon.png" type="image/png" sizes="512x512"><link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32"><link rel="apple-touch-icon" href="apple-touch-icon.png"><meta name="theme-color" content="#b3121f"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://script.google.com"><link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<title>School Admin - ARK-Portal Sms</title><link rel="stylesheet" href="css/style.css">
+</head><body class="has-side"><div class="shell">
+<aside class="side" id="sidePanel" aria-label="My account">
+  <div class="side-profile" id="sideProfile"><div class="side-photo-wrap"><img id="sidePhoto" class="side-photo" alt="" hidden><span id="sideAvatar" class="side-avatar" aria-hidden="true"></span></div>
+    <div class="side-name" id="sideName"></div><div class="side-pos" id="sidePos"></div><div class="side-dept" id="sideDept"></div><span id="who" hidden></span></div>
+  <nav id="sideNav" aria-label="Pages"></nav>
+  <div class="who"><button class="btn" id="out" type="button">Sign out</button></div>
+</aside>
+<main class="main">
+<div class="top noprint"><div class="brand"><span class="mark logo"><img src="img/logo.png" alt="ARK-Portal Sms"></span></div><span id="sync" class="sync"><i class="dot"></i><span>Online</span></span></div>
+<div id="msg" class="notice noprint" hidden role="alert"></div>
+<div class="panel"><h2>School Admin</h2>
+<p class="muted">You can see the dashboards and reports of every department of the school. Everything here is <b>view only</b>: you cannot add, change or delete records. Choose a department:</p>
+<div class="vo-cards">
+<a class="vo-card" href="registrar"><h3>Registrar</h3><p>Enrollment dashboard, registration and enrolled masterlists.</p></a>
+<a class="vo-card" href="finance"><h3>Finance</h3><p>Collections, balances, payment transactions and the enrolled masterlist.</p></a>
+<a class="vo-card" href="payroll"><h3>Payroll</h3><p>Payroll dashboard (cash advances, loans, attendance) and reports.</p></a>
+<a class="vo-card" href="hr"><h3>HR</h3><p>Employee dashboard, the list of employees and leave requests.</p></a>
+<a class="vo-card" href="custodian"><h3>Custodian</h3><p>Uniform, ID and item records, student files and monitoring.</p></a>
+<a class="vo-card" href="guidance"><h3>Guidance</h3><p>Health and guidance dashboard, records and student files.</p></a>
+</div></div>
+<p class="muted fine">Your own <b>Leave request</b> button (side panel) works as for every employee.</p>
+</main></div>
+<script type="module" src="js/sidepanel.js"></script>
+<script type="module" src="js/schooladmin.js"></script>
+<script type="module" src="js/viewonly.js"></script>
+<script type="module" src="js/leave.js"></script>
+<script src="js/mobile.js" defer></script>
+<script src="js/collapse.js" defer></script>
+</body></html>

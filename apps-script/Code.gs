@@ -33,7 +33,7 @@ var SCHOOL_COLLECTIONS = ['scanResults', 'examAttempts', 'examSubmissions', 'exa
   'employees', 'hrSettings', 'hrLog', 'leaveRequests',
   'scheduleSemesters', 'classSchedules', 'scheduleSettings', 'payrollSettings', 'payrollInfo', 'payrollRuns', 'payslips', 'payrollDtr'];
 /* Every kind of employee account. HR adds the employee first (collection `employees`); the IT Admin then creates the login. */
-var EMP_ROLES = ['teacher', 'registrar', 'finance', 'payroll', 'custodian', 'guidance', 'hr', 'staff'];   // 'payroll' = Finance - Payroll officer;   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
+var EMP_ROLES = ['teacher', 'registrar', 'finance', 'payroll', 'custodian', 'guidance', 'hr', 'schooladmin', 'staff'];   // 'schooladmin' = School Admin (principal / school head): READ-ONLY view of every department's dashboards and reports; 'payroll' = Finance - Payroll officer;   // 'staff' = every other position (principal, librarian, nurse, guard, driver, janitor ...)
 var MANAGED_ROLES = EMP_ROLES.concat(['student']);
 var LEAVE_ROLES = EMP_ROLES.concat(['admin']);   // everyone who can file a leave request to HR
 var ACTOR_TTL = 300;                    // seconds a signed-in person's profile is remembered between requests (was 20)
@@ -273,7 +273,7 @@ function makeS(actor, now) {
   S.live = S.hasProfile && me.status === 'active' && me.mustChangePassword !== true && S.schoolLive;
   S.isSuper = S.live && me.role === 'superadmin'; S.isAdmin = S.live && me.role === 'admin';
   S.isTeacher = S.live && me.role === 'teacher'; S.isRegistrar = S.live && me.role === 'registrar';
-  S.isFinance = S.live && me.role === 'finance'; S.isPayroll = S.live && me.role === 'payroll'; S.isHR = S.live && me.role === 'hr'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
+  S.isFinance = S.live && me.role === 'finance'; S.isPayroll = S.live && me.role === 'payroll'; S.isHR = S.live && me.role === 'hr'; S.isCustodian = S.live && me.role === 'custodian'; S.isGuidance = S.live && me.role === 'guidance'; S.isSchoolAdmin = S.live && me.role === 'schooladmin'; S.isStaff = S.isAdmin || S.isTeacher; S.isStudent = S.live && me.role === 'student';
   S.get = function (c, id) { return isStr(id) && id ? getDoc(c, id) : null; };
   S.exists = function (c, id) { return !!S.get(c, id); };
   S.validAdviser = function (uid) { var u = S.get('users', uid); return !!u && u.role === 'teacher' && u.schoolId === S.sid; };
@@ -600,6 +600,18 @@ RULES.scheduleSettings = {   // the Registrar's own lists (subjects, rooms) and 
     del: function (S, id, o) { return (S.isStaff && o.ownerUid === S.uid) || S.isSuper; }
   };
 });
+/* ---- School Admin: READ-ONLY. May read the data behind every department's dashboards and reports (registrar, finance, payroll, HR, custodian, guidance)
+   for their own school, and nothing else. No create / update / delete rule is touched, so the School Admin can never change a record here. ---- */
+var SCHOOL_ADMIN_READ = ['registry', 'enrollmentRecords', 'registrarSettings', 'registrarLog', 'students', 'classes', 'scheduleSemesters', 'classSchedules', 'scheduleSettings',
+  'payments', 'studentAccounts', 'financeSettings', 'financeLog', 'custodianRecords', 'custodianSettings', 'custodianLog', 'healthRecords', 'guidanceRecords', 'guidanceSettings', 'guidanceLog',
+  'employees', 'hrSettings', 'hrLog', 'leaveRequests', 'payrollSettings', 'payrollInfo', 'payrollRuns', 'payslips', 'payrollDtr', 'users'];
+SCHOOL_ADMIN_READ.forEach(function (c) {
+  var old = RULES[c].read;
+  RULES[c].read = function (S, d, id, mode) {
+    if (S.isSchoolAdmin && ((d && d.schoolId === S.sid) || (isStr(id) && id === S.sid))) return true;
+    return old(S, d, id, mode);
+  };
+});
 function rulesOf(coll) { if (KNOWN.indexOf(coll) < 0) deny(); return RULES[coll]; }
 
 /* ============================== reading and writing documents ============================== */
@@ -887,7 +899,7 @@ function actHrSyncAccounts(actor) {
       var key = staffKey(S.sid, u.employeeId); if (getDoc('employees', key)) return;
       var nm = String(u.displayName || '').split(',');
       putDoc('employees', key, { schoolId: S.sid, employeeId: u.employeeId, lastName: u.lastName || nm[0].trim(), firstName: u.firstName || (nm[1] || '').trim(), middleInitial: u.middleInitial || '',
-        birthday: u.birthday || '', email: u.hasRealEmail ? u.email : '', position: u.role === 'teacher' ? 'Teacher' : u.role.charAt(0).toUpperCase() + u.role.slice(1), status: 'Active', accessType: u.role,
+        birthday: u.birthday || '', email: u.hasRealEmail ? u.email : '', position: u.role === 'teacher' ? 'Teacher' : (REC_ROLE_NAME[u.role] || u.role.charAt(0).toUpperCase() + u.role.slice(1)), status: 'Active', accessType: u.role,
         accountUid: uids[h.i], accountRole: u.role, accountCreatedAt: u.createdAt || { __ts: now }, createdBy: actor.uid, createdAt: { __ts: now } });
       added.push(key);
     });
@@ -1268,7 +1280,7 @@ var REC_GROUPS = { registrar: 'Registrar', finance: 'Finance', payroll: 'Finance
 var REC_ORDER = ['registrar', 'finance', 'payroll', 'custodian', 'guidance', 'hr', 'admin'];
 /** Every user type / department has its own book, named "ARK - Important Details - <department>". */
 function recBookTitle(grp) { return 'ARK - Important Details - ' + REC_GROUPS[grp]; }
-var REC_ROLE_NAME = { teacher: 'Teacher', registrar: 'Registrar', finance: 'Finance', payroll: 'Finance - Payroll', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR', staff: 'Other staff' };
+var REC_ROLE_NAME = { teacher: 'Teacher', registrar: 'Registrar', finance: 'Finance', payroll: 'Finance - Payroll', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR', schooladmin: 'School Admin', staff: 'Other staff' };
 function recSchoolYear(ts) { var ms = tsOf(ts); if (typeof ms !== 'number' || !ms) return ''; var d = new Date(ms), y = d.getFullYear(); return d.getMonth() >= 5 ? y + '-' + (y + 1) : (y - 1) + '-' + y; }
 function recKeysOf(grp) { return Object.keys(REC).filter(function (k) { return REC[k].grp === grp; }); }
 function recIdProp(grp) { return 'RECORDS_ID_' + grp.toUpperCase(); }

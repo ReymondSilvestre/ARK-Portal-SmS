@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS = {
   hoursPerDay: 8,
   otRate: 1.25,                   // overtime = hourly rate x this
   contribTiming: "split",         // semi-monthly: take the contributions half in each pay ("split"), or all in the "first" / "second" pay
-  adminRange: { min: 0, max: 0 },   // salary range of the school administrators (monthly); a pay outside it is flagged, 0 = no limit
+  adminRange: { min: 0, max: 0 },   // salary range of the school admins (monthly); a pay outside it is flagged, 0 = no limit
   cutoffPair: "B",                // usual cut-off: "A" = 26th-10th and 11th-25th, "B" = 1st-15th and 16th-end (the cut-off can still be chosen for every payroll)
   // Government benefits: mode "fixed" = the same fixed amount a month (employee share / employer share) typed here or per employee under Add information;
   // mode "percent" = the rate below applied to the monthly pay.
@@ -81,9 +81,9 @@ export function cutOfDates(start, end) {
   return "custom";
 }
 /** A per-hour employee (teachers are paid for the hours they teach, not a fixed daily pay). Saved choice first; without one, a position with teacher / instructor / professor is per hour. */
-export const CATEGORIES = [{ key: "staff", label: "Employee staff", short: "Staff" }, { key: "teacher", label: "Teachers (paid per hour)", short: "Teachers" }, { key: "admin", label: "School administrators", short: "Administrators" }];
-const TEACHER_RX = /teacher|instructor|professor|faculty/i, ADMIN_RX = /principal|school head|head of school|director|administrator|president|dean|superintendent|supervisor|coordinator/i;
-/** The payroll group of an employee: staff, teacher (paid per hour) or admin (school administrators). The saved choice first; without one it follows the position. */
+export const CATEGORIES = [{ key: "staff", label: "Employee staff", short: "Staff" }, { key: "teacher", label: "Teachers (paid per hour)", short: "Teachers" }, { key: "admin", label: "School admins", short: "School admins" }];
+const TEACHER_RX = /teacher|instructor|professor|faculty/i, ADMIN_RX = /principal|school head|head of school|school admin|director|administrator|president|dean|superintendent|supervisor|coordinator/i;
+/** The payroll group of an employee: staff, teacher (paid per hour) or admin (school admins). The saved choice first; without one it follows the position. */
 export function categoryOf(info) {
   if (!info) return "staff";
   if (info.category === "staff" || info.category === "teacher" || info.category === "admin") return info.category;

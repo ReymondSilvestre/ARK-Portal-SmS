@@ -42,7 +42,7 @@
         <p class="muted"><b>The employee is registered first</b> (by HR, or by you under <a href="#employees">Employee registration</a>). You then choose that employee below and pick the account type. The employee signs in with the school code + Employee No.; the first password is the birth year + first letter of the last name (example <b>1985D</b>) and must be changed at first sign-in.</p>
         <form id="newT" class="row" novalidate>
           <label>Employee <small id="empHint">Added by HR</small><select name="employee" id="empSel"></select></label>
-          <label>Account type<select name="role" id="roleSel"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="payroll">Finance - Payroll</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option><option value="staff">Other staff (any position)</option><option value="hr">HR</option></select></label>
+          <label>Account type<select name="role" id="roleSel"><option value="teacher">Faculty / Teacher</option><option value="registrar">Registrar</option><option value="finance">Finance</option><option value="payroll">Finance - Payroll</option><option value="custodian">Custodian</option><option value="guidance">Guidance</option><option value="schooladmin">School Admin (view only)</option><option value="staff">Other staff (any position)</option><option value="hr">HR</option></select></label>
           <label>Email <small>Optional. Used for password reset.</small><input name="email" type="email" autocomplete="off" placeholder="Leave blank: reset links go to your inbox"></label>
           <button class="btn primary" id="addBtn">Create account</button>
         </form>
@@ -58,7 +58,7 @@
         <div class="sc-tabs"><button class="btn on" type="button" data-acc="emp">Employee accounts (<span id="nEmp">0</span>)</button><button class="btn" type="button" data-acc="stu">Student accounts (<span id="nStu">0</span>)</button></div>
         <div id="accEmp">
           <div class="row"><label>Search<input id="q" placeholder="Name, Employee No., position or department"></label>
-            <label>Show<select id="roleF"><option value="">All employee accounts</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="payroll">Finance - Payroll only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="staff">Other staff only</option><option value="hr">HR only</option></select></label>
+            <label>Show<select id="roleF"><option value="">All employee accounts</option><option value="teacher">Teachers only</option><option value="registrar">Registrars only</option><option value="finance">Finance only</option><option value="payroll">Finance - Payroll only</option><option value="custodian">Custodians only</option><option value="guidance">Guidance only</option><option value="schooladmin">School Admins only</option><option value="staff">Other staff only</option><option value="hr">HR only</option></select></label>
             <button class="btn" type="button" id="bulkEmp">Set password for all listed</button></div>
           <div class="tablewrap"><table id="teachers"></table></div>
         </div>

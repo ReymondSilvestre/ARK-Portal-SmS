@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, writ
 import { TERMS, termRank } from "./omr.js";
 
 const $ = (id) => document.getElementById(id);
-const { user, profile, school } = await requireRole(["finance"]);
+const { user, profile, school } = await requireRole(["finance", "schooladmin"]);   // the School Admin opens this page view-only (js/viewonly.js)
 const SID = profile.schoolId;
 $("who").textContent = profile.displayName + " (Finance)"; $("out").onclick = logout;
 applyBranding(school);
@@ -77,6 +77,7 @@ function build() {
 }
 /** Keeps each student's own balance record (read by the Student page) in step. Only records that changed are written. */
 async function syncAccounts(only) {
+  if (profile.role === "schooladmin") return;   // view only: never writes
   const y = $("fnYear").value, changed = [];
   for (const b of (only || S.bill).filter((x) => x.examNo)) {
     const id = `${b.r.id}_${y}`.replace(/[\s/]+/g, "-"), data = { schoolId: SID, schoolYear: y, registryId: b.r.id, studentId: b.examNo, studentNo: b.r.studentNo, name: b.r.name, gradeLevel: b.grade, voucherType: b.voucher, section: b.section, totalDue: b.due, totalPaid: b.paid, balance: b.balance, lines: b.lines };

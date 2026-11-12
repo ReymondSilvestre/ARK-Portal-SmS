@@ -686,3 +686,17 @@ body.has-side .top>.sync{display:none!important}
 .cx-bar{display:flex;gap:.4rem;align-items:center;justify-content:flex-end;margin:0 0 .8rem;font-size:.82rem;color:var(--muted,#666)}
 .cx-bar .btn{padding:.15rem .6rem}
 @media print{.cx-btn,.cx-bar{display:none!important}.cx-hid{display:revert!important}}
+
+/* ---------- School Admin: view-only mode (js/viewonly.js) ---------- */
+.vo-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;margin:.2rem 0 .9rem}
+.vo-bar .vo-tag{background:#fff3cd;color:#664d03;border:1px solid #ffe69c;border-radius:999px;padding:.15rem .7rem;font-size:.78rem;font-weight:700;margin-right:.3rem}
+.vo-bar a{padding:.35rem .85rem;border:1px solid #d8dde6;border-radius:999px;background:#fff;color:inherit;text-decoration:none;font-size:.88rem;font-weight:600}
+.vo-bar a:hover{border-color:#b3121f;color:#b3121f}
+.vo-bar a.on{background:#b3121f;border-color:#b3121f;color:#fff}
+body.viewonly .btn.danger,body.viewonly [data-void],body.viewonly [data-goto],body.viewonly [data-act="edit"],body.viewonly [data-act="del"],
+body.viewonly [data-lv],body.viewonly [data-lvdel],body.viewonly [data-ed],body.viewonly [data-del]{display:none!important}
+.vo-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem;margin-top:1rem}
+.vo-card{display:block;padding:1.1rem 1.2rem;border:1px solid #d8dde6;border-radius:12px;background:#fff;color:inherit;text-decoration:none}
+.vo-card:hover{border-color:#b3121f;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.vo-card h3{margin:0 0 .35rem;color:#b3121f}
+.vo-card p{margin:0;font-size:.9rem}

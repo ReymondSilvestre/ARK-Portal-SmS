@@ -33,8 +33,8 @@ $("dlgCopy").onclick = () => navigator.clipboard?.writeText($("dlgPw").textConte
 const ask = (text) => confirm(text);
 const lastOf = (t) => t.lastName || String(t.displayName || "").split(",")[0];
 const pwOf = (t) => defaultStudentPassword({ birthday: t.birthday, lastName: lastOf(t) });
-const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", payroll: "Finance - Payroll", custodian: "Custodian", guidance: "Guidance", hr: "HR", staff: "Other staff" };
-const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", payroll: "finance - payroll", custodian: "custodian", guidance: "guidance", hr: "HR", staff: "other staff", teacher: "faculty / teacher" };
+const ROLE_NAME = { teacher: "Teacher", registrar: "Registrar", finance: "Finance", payroll: "Finance - Payroll", custodian: "Custodian", guidance: "Guidance", hr: "HR", schooladmin: "School Admin", staff: "Other staff" };
+const ROLE_LABEL = { student: "student", registrar: "registrar", finance: "finance", payroll: "finance - payroll", custodian: "custodian", guidance: "guidance", hr: "HR", schooladmin: "school admin", staff: "other staff", teacher: "faculty / teacher" };
 const userOf = (t) => (t.role === "student" ? t.studentId : t.employeeId);
 
 /* ---------- connection indicator ---------- */
@@ -64,7 +64,7 @@ const syOf = (ts) => { const d = ts?.toDate ? ts.toDate() : null; if (!d) return
 const UI = { acc: "emp" };
 async function loadTeachers() {
   const [snap, st] = await Promise.all([
-    getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "payroll", "custodian", "guidance", "hr", "staff", "student"]))),
+    getDocs(query(collection(db, "users"), where("schoolId", "==", SID), where("role", "in", ["teacher", "registrar", "finance", "payroll", "custodian", "guidance", "hr", "schooladmin", "staff", "student"]))),
     getDocs(query(collection(db, "students"), where("schoolId", "==", SID))).catch(() => null),
   ]);
   users = snap.docs.map((d) => d.data()).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));

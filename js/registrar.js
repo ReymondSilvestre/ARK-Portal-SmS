@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, getDoc, doc, setDoc, updateDoc, dele
 import { TERMS, termRank } from "./omr.js";
 
 const $ = (id) => document.getElementById(id);
-const { user, profile, school } = await requireRole(["registrar"]);
+const { user, profile, school } = await requireRole(["registrar", "schooladmin"]);   // the School Admin opens this page view-only (js/viewonly.js)
 const SID = profile.schoolId;
 $("who").textContent = profile.displayName + " (Registrar)"; $("out").onclick = logout;
 applyBranding(school);
@@ -63,6 +63,7 @@ async function refresh() {
 }
 /** Students registered before the "enrollment status" existed get one now (worked out once from their enrollment records). */
 async function backfillStatus() {
+  if (profile.role === "schooladmin") return;   // view only: never writes
   const todo = S.registry.filter((r) => !r.enrollStatus);
   if (!todo.length) return;
   const stOf = (r) => { const mine = S.enrollments.filter((e) => e.registryId === r.id); if (!mine.length) return "Not Enrolled"; if (mine.some((e) => !e.remark)) return "Enrolled"; return mine.find((e) => e.remark).remark; };
