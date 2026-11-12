@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   otRate: 1.25,                   // overtime = hourly rate x this
   contribTiming: "split",         // older single setting, now only the fallback: each benefit (sss / phic / hdmf) has its own `when`: "split" = half in each cut-off, "first" / "second" = all in that cut-off
   minWage: { on: true, daily: 645 },   // minimum wage: the lowest DAILY rate paid to any employee (teachers: this / hours a day, per hour). Changeable under Settings > Minimum wage
+  teacherRate: 100,               // starting rate per hour of a teacher (PHP). New teacher pay records start with this; it can be changed here, and per teacher under Add information
   adminRange: { min: 0, max: 0 },   // salary range of the school admins (monthly); a pay outside it is flagged, 0 = no limit
   cutoffPair: "B",                // usual cut-off: "A" = 26th-10th and 11th-25th, "B" = 1st-15th and 16th-end (the cut-off can still be chosen for every payroll)
   // Government benefits: mode "fixed" = the same fixed amount a month (employee share / employer share) typed here or per employee under Add information;

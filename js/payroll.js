@@ -98,7 +98,7 @@ function balancesXls() {
 }
 
 /* ---------- add information (pay information per employee) ---------- */
-const newInfo = (e) => ({ schoolId: SID, employeeKey: e.id, employeeId: e.employeeId, name: nameOf(e), position: e.position || "", department: e.department || "", basicMonthly: r2(minDaily(S.settings) * (+S.settings.workDays || 22)), dailyRate: minDaily(S.settings), category: categoryOf({ position: e.position }), payType: isHourly({ position: e.position }) ? "hourly" : "monthly", hourlyRate: 0, allowances: [], deductions: [], sss: true, philhealth: true, pagibig: true, tax: true, fixed: {}, ca: { balance: 0, perPay: 0, history: [] }, active: true, bank: "", createdBy: user.uid, createdAt: serverTimestamp() });
+const newInfo = (e) => ({ schoolId: SID, employeeKey: e.id, employeeId: e.employeeId, name: nameOf(e), position: e.position || "", department: e.department || "", basicMonthly: r2(minDaily(S.settings) * (+S.settings.workDays || 22)), dailyRate: minDaily(S.settings), category: categoryOf({ position: e.position }), payType: isHourly({ position: e.position }) ? "hourly" : "monthly", hourlyRate: isHourly({ position: e.position }) ? r2(+S.settings.teacherRate || 0) : 0, allowances: [], deductions: [], sss: true, philhealth: true, pagibig: true, tax: true, fixed: {}, ca: { balance: 0, perPay: 0, history: [] }, active: true, bank: "", createdBy: user.uid, createdAt: serverTimestamp() });
 const dailyOf = (i) => r2(dailyRateOf(i, S.settings));   // the daily rate paid: the saved one (older records: monthly pay / working days), never below the minimum wage (Settings)
 const catMeta = (k) => CATEGORIES.find((c) => c.key === k) || CATEGORIES[0];
 const outOfRange = (pay) => { const R = S.settings.adminRange || {}, v = +pay || 0; return (+R.min > 0 && v < +R.min) || (+R.max > 0 && v > +R.max); };
@@ -133,7 +133,7 @@ function infoForm(f) {
   return `<div class="pr-card"><h3>${esc(nameOf(e))} <small>Employee No. ${esc(f.employeeId)}</small></h3>
     <h3>Pay</h3>
     <div class="row"><label>Payroll group<select id="fPayType">${CATEGORIES.map((c) => `<option value="${c.key}"${categoryOf(f) === c.key ? " selected" : ""}>${c.label}</option>`).join("")}</select></label>
-      <label>Rate per hour (PHP) <small>(teachers)</small><input id="fRate" type="number" min="0" step="0.01" value="${+f.hourlyRate || 0}"${isHourly(f) ? "" : " disabled"}></label>
+      <label>Rate per hour (PHP) <small>(teachers)</small><input id="fRate" type="number" min="0" step="0.01" value="${+f.hourlyRate || r2(+S.settings.teacherRate || 0)}"${isHourly(f) ? "" : " disabled"}></label>
       <label>Daily rate (PHP) <small>(staff and school admins)</small><input id="fDaily" type="number" min="0" step="0.01" value="${dailyOf(f)}"${isHourly(f) ? " disabled" : ""}></label></div>
     <p class="muted fine" id="fMonthNote"></p>
     <p class="muted fine">A <b>per-hour</b> employee is paid for the hours actually worked in each cut-off (hours from the biometric DTR, which you can correct in the payroll) times the rate per hour. No daily rate, no absence or late deduction. <b>Employee staff</b> are paid the <b>daily rate x working days a month</b> (Settings > Pay), less absences and late. <b>School admins</b> have a daily rate too (kept within the salary range under Settings) and the pay of each cut-off can be typed by hand in the payroll.</p>
@@ -184,7 +184,7 @@ $("pInfo").addEventListener("click", (ev) => run(async () => {
   }
 }));
 S.pendingPay = {};
-$("pInfo").addEventListener("change", (ev) => { if (ev.target.id !== "fPayType") return; const h = ev.target.value === "teacher"; $("fRate").disabled = !h; $("fDaily").disabled = h; monthNote(); });
+$("pInfo").addEventListener("change", (ev) => { if (ev.target.id !== "fPayType") return; const h = ev.target.value === "teacher"; if (h && !(+$("fRate").value > 0)) $("fRate").value = r2(+S.settings.teacherRate || 0); $("fRate").disabled = !h; $("fDaily").disabled = h; monthNote(); });
 function monthNote() { const el = $("fMonthNote"), d = $("fDaily"); if (!el || !d) return; const w = +S.settings.workDays || 22, v = +d.value || 0; el.innerHTML = d.disabled ? "" : `Monthly pay = <b>${money(v)}</b> x ${w} working days = <b>${money(r2(v * w))}</b> a month (the working days a month are set under Settings > Pay).`; }
 $("pInfo").addEventListener("input", (ev) => { if (ev.target.id === "fDaily") monthNote(); });
 new MutationObserver(() => monthNote()).observe($("pInfo"), { childList: true });
@@ -608,6 +608,9 @@ function rSettings() {
     <div class="row"><label>Apply the minimum wage${ck("sMwOn", (s.minWage || {}).on !== false)}</label><label>Minimum wage per day (PHP)${n("sMwDaily", (s.minWage || {}).daily)}</label></div>
     <p class="muted fine" id="sMwNote"></p>
     <div class="btnbar"><button class="btn" id="sMwApply" type="button" title="Sets the daily rate of every employee who is below the minimum wage (and creates the missing pay records) to the minimum wage">Apply to all employees now</button></div></div>
+  <div class="pr-card"><h3>Teacher rate per hour</h3><p class="muted fine">The <b>starting rate per hour</b> of a teacher (paid per hour). New teacher pay records start with this rate, and it fills the rate when an employee is changed to the Teachers group. Each teacher can still have an own rate under <b>Add information</b>, just like the daily rate of employee staff. The pay is never below the minimum wage divided by the hours a day.</p>
+    <div class="row"><label>Starting rate per hour (PHP)${n("sTeachRate", s.teacherRate)}</label></div>
+    <div class="btnbar"><button class="btn" id="sTrApply" type="button" title="Sets the rate per hour of every teacher who has no rate yet to this rate">Apply to teachers without a rate</button><button class="btn" id="sTrAll" type="button" title="Sets the rate per hour of EVERY teacher to this rate (replaces their own rates)">Apply to all teachers</button></div></div>
   <div class="pr-card"><h3>Cut-off and pay date</h3><p class="muted fine">Every payroll can follow one of four cut-offs: <b>26th - 10th</b>, <b>11th - 25th</b>, <b>1st - 15th</b> or <b>16th - end of month</b> (or a whole month, or dates you type). Choose the cut-off on the Payroll tab each time; the pair below is only the one offered first. The pay day starts with these rules and can be changed for every payroll. Use 0 for the pay day to mean the last day of the month.</p>
     <div class="row"><label>Usual cut-offs<select id="sPair"><option value="B"${s.cutoffPair !== "A" ? " selected" : ""}>1st - 15th and 16th - end of month</option><option value="A"${s.cutoffPair === "A" ? " selected" : ""}>26th - 10th and 11th - 25th</option></select></label>
       <label>Pay day of the 1st cut-off <small>(26th - 10th or 1st - 15th)</small>${n("sPayF", s.period.payFirst, "1")}</label><label>Pay day of the 2nd cut-off <small>(11th - 25th or 16th - end)</small>${n("sPayS", s.period.paySecond, "1")}</label><label>Pay day when paid once a month${n("sPayW", s.period.payWhole, "1")}</label></div></div>
@@ -640,7 +643,7 @@ function rSettings() {
   /* section menu: choose which part of the Settings to work on (nothing is folded; every field stays in the page, so Save settings saves all of them) */
   (() => {
     const cards = [...document.querySelectorAll("#pSettings .panel > .pr-card")], title = (c) => (c.querySelector(":scope > h3").childNodes[0].textContent || "").trim();
-    const GROUPS = [["Pay and wages", /^(Pay|Minimum wage|Cut-off|School admins)/], ["Government benefits and tax", /^(Government|SSS|PhilHealth|Pag-IBIG|Withholding)/], ["Attendance and holidays", /^(Biometric|Holiday list|Payment of holidays)/], ["Payslip", /^Signator/]];
+    const GROUPS = [["Pay and wages", /^(Pay|Minimum wage|Teacher rate|Cut-off|School admins)/], ["Government benefits and tax", /^(Government|SSS|PhilHealth|Pag-IBIG|Withholding)/], ["Attendance and holidays", /^(Biometric|Holiday list|Payment of holidays)/], ["Payslip", /^Signator/]];
     const grp = GROUPS.map(([g, re]) => [g, cards.map((c, i) => [i, title(c)]).filter(([, t]) => re.test(t))]).filter(([, l]) => l.length);
     const cur = S.setSec === undefined ? "0" : S.setSec;
     $("sMenuWrap").innerHTML = `<div class="menu-bar noprint"><label class="menu-lbl" for="sMenu">Settings section</label><div class="menu-wrap"><select id="sMenu" class="menu-select" aria-label="Choose a settings section"><option value="all"${cur === "all" ? " selected" : ""}>All sections</option>${grp.map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(([i, t]) => `<option value="${i}"${cur === String(i) ? " selected" : ""}>${esc(t)}</option>`).join("")}</optgroup>`).join("")}</select></div></div>`;
@@ -657,6 +660,16 @@ function rSettings() {
     for (let k = 0; k < todo.length; k += 400) { const b = writeBatch(db); todo.slice(k, k + 400).forEach((e) => { const i = S.info.get(e.id); if (i) b.set(doc(db, "payrollInfo", e.id), { dailyRate: m, basicMonthly: r2(m * w), updatedAt: serverTimestamp() }, { merge: true }); else b.set(doc(db, "payrollInfo", e.id), { ...newInfo(e), dailyRate: m, basicMonthly: r2(m * w) }); }); await b.commit(); }
     await refresh(); flash(`${todo.length} employee${todo.length === 1 ? "" : "s"} set to the minimum wage of ${money(m)} a day.`, true);
   });
+  const applyTeacherRate = (all) => run(async () => {
+    const t = r2(+$("sTeachRate").value || 0); if (!(t > 0)) return flash("Type the starting rate per hour first, then save the settings.");
+    const isT = (e) => { const i = S.info.get(e.id); return i ? isHourly(i) : isHourly({ position: e.position }); };
+    const todo = S.emps.filter((e) => { if (!isT(e)) return false; const i = S.info.get(e.id); return all ? !(i && r2(+i.hourlyRate) === t) : !(i && +i.hourlyRate > 0); });
+    if (!todo.length) return flash(all ? `Every teacher is already at ${money(t)} an hour.` : "Every teacher already has a rate per hour.", true);
+    const a = await showPopup({ title: "Apply the teacher rate?", html: `<p><b>${todo.length}</b> teacher${todo.length === 1 ? "" : "s"} will be set to <b>${money(t)}</b> an hour${all ? " (their own rates are replaced)" : ""}. Missing pay records are created.</p>`, buttons: [{ label: "Cancel", value: "no" }, { label: "Apply", value: "yes", primary: true }] }); if (a.value !== "yes") return;
+    for (let k = 0; k < todo.length; k += 400) { const b = writeBatch(db); todo.slice(k, k + 400).forEach((e) => { const i = S.info.get(e.id); if (i) b.set(doc(db, "payrollInfo", e.id), { hourlyRate: t, updatedAt: serverTimestamp() }, { merge: true }); else b.set(doc(db, "payrollInfo", e.id), { ...newInfo(e), hourlyRate: t }); }); await b.commit(); }
+    await refresh(); flash(`${todo.length} teacher${todo.length === 1 ? "" : "s"} set to ${money(t)} an hour.`, true);
+  });
+  $("sTrApply").onclick = () => applyTeacherRate(false); $("sTrAll").onclick = () => applyTeacherRate(true);
   $("sSigAdd").onclick = () => { if (document.querySelectorAll("#sSig .r").length >= 3) return flash("Up to 3 signatories."); $("sSig").insertAdjacentHTML("beforeend", sigRow({ label: "", name: "", position: "" })); };
   $("sSig").onclick = (e) => { const b = e.target.closest("[data-sgrm]"); if (b) b.closest(".r").remove(); };
   const holCount = () => { const n = [...document.querySelectorAll("#sHol .r")].filter((r) => r.querySelector("input").value).length; $("sHolCount").textContent = n ? `${n} holiday${n === 1 ? "" : "s"} in the list.` : "No holiday in the list yet."; }; holCount();
@@ -688,11 +701,12 @@ function rSettings() {
     if (["hRegN", "hRegW", "hSpN", "hSpW"].some((id) => !(v(id) >= 0))) return flash("The holiday percents cannot be negative.");
     if ([per.payFirst, per.paySecond, per.payWhole].some((x) => !(x >= 0 && x <= 31))) return flash("A pay day must be 0 (last day of the month) or a day from 1 to 31.");
     if (!(v("sMwDaily") >= 0)) return flash("The minimum wage cannot be negative.");
+    if (!(v("sTeachRate") >= 0)) return flash("The teacher rate per hour cannot be negative.");
     if (v("sAdMax") > 0 && v("sAdMax") < v("sAdMin")) return flash("The highest school admin pay must be higher than the lowest.");
     if (["sSssFe", "sSssFr", "sPhFe", "sPhFr", "sHdFe", "sHdFr"].some((id) => !(v(id) >= 0))) return flash("A fixed amount cannot be negative.");
     const signatories = [...document.querySelectorAll("#sSig .r")].map((r) => { const g = (k) => r.querySelector(`[data-sg="${k}"]`).value.trim(); return { label: g("label"), name: g("name"), position: g("position") }; }).filter((x) => x.label || x.name || x.position);
     if (!signatories.length) return flash("Add at least one signatory (for example Prepared by - your name - Finance Officer).");
-    const data = { schoolId: SID, frequency: $("sFreq").value, cutoffPair: $("sPair").value, adminRange: { min: v("sAdMin"), max: v("sAdMax") }, minWage: { on: c("sMwOn"), daily: v("sMwDaily") }, workDays: v("sDays"), hoursPerDay: v("sHours"), otRate: v("sOt"), contribTiming: S.settings.contribTiming || "split", unpaidLeave: c("sLeave"),
+    const data = { schoolId: SID, frequency: $("sFreq").value, cutoffPair: $("sPair").value, adminRange: { min: v("sAdMin"), max: v("sAdMax") }, minWage: { on: c("sMwOn"), daily: v("sMwDaily") }, teacherRate: v("sTeachRate"), workDays: v("sDays"), hoursPerDay: v("sHours"), otRate: v("sOt"), contribTiming: S.settings.contribTiming || "split", unpaidLeave: c("sLeave"),
       sss: { on: c("sSssOn"), when: $("sSssW").value, mode: $("sSssM").value, fixedEe: v("sSssFe"), fixedEr: v("sSssFr"), rate: v("sSssR"), erRate: v("sSssE"), ec: v("sSssEc"), min: v("sSssMin"), max: v("sSssMax"), step: 500 }, phic: { on: c("sPhOn"), when: $("sPhW").value, mode: $("sPhM").value, fixedEe: v("sPhFe"), fixedEr: v("sPhFr"), rate: v("sPhR"), employeeShare: v("sPhS"), min: v("sPhMin"), max: v("sPhMax") },
       hdmf: { on: c("sHdOn"), when: $("sHdW").value, mode: $("sHdM").value, fixedEe: v("sHdFe"), fixedEr: v("sHdFr"), rate: v("sHdR"), erRate: v("sHdE"), cap: v("sHdCap") }, tax: { on: c("sTxOn"), brackets }, dtr: { start: $("dStart").value || "08:00", end: $("dEnd").value || "17:00", lunchMin: v("dLunch"), graceMin: v("dGrace"), otStartMin: v("dOtS"), otBlockMin: Math.max(5, v("dOtB")), halfDayHrs: v("dHalf"), dateOrder: $("dOrder").value, restDayAsOt: c("dRest"), workDays: [...document.querySelectorAll("[data-wd]:checked")].map((x) => +x.dataset.wd),
         holidays: [...document.querySelectorAll("#sHol .r")].map((r) => { const i = r.querySelectorAll("input"); return { date: i[0].value, label: i[1].value.trim(), type: r.querySelector("select").value }; }).filter((h) => h.date) }, holiday: { regular: { notWorked: v("hRegN"), worked: v("hRegW") }, special: { notWorked: v("hSpN"), worked: v("hSpW") }, teachersPaid: c("hTeach") }, period: per, signatories, updatedAt: serverTimestamp() };
