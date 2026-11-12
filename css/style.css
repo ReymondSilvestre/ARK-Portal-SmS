@@ -673,4 +673,5 @@ body.has-side .top>.sync{display:none!important}
 
 /* "Another user saved a change" notice (js/db.js live updates): small, bottom corner, never moves the page */
 .live-chip{position:fixed;right:1rem;bottom:1rem;z-index:50;display:flex;gap:.6rem;align-items:center;background:#1c1c1e;color:#fff;padding:.5rem .8rem;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.3);font-size:.9rem}
+.live-chip .live-x{background:none;border:0;color:#fff;font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .2rem;opacity:.7}.live-chip .live-x:hover{opacity:1}
 @media print{.live-chip{display:none}}

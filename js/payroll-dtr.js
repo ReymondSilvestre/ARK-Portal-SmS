@@ -79,7 +79,7 @@ export function parsePunches(rows, cols, hasHeader, order = "MDY") {
 
 /** One day. day: { date, in: "HH:MM"|"", out: "HH:MM"|"" }; shift: { start, end } ("HH:MM"); D: the DTR settings; ctx: { holiday, leave } (leave = an approved leave covers the day).
  *  Returns { s, h, late, ut, ot, pres, abs, inc } - s: P present, HD half day, A absent, L leave, H holiday, R rest day, RW worked on a rest day / holiday, INC only one punch. Times in minutes, h in hours. */
-export function calcDay(day, shift, D, ctx = {}) {
+function calcAuto(day, shift, D, ctx = {}) {
   const z = { s: "", h: 0, late: 0, ut: 0, ot: 0, pres: 0, abs: 0, inc: false }, i = toMin(day.in), o = toMin(day.out), has = i !== null || o !== null, both = i !== null && o !== null && o > i;
   const sM = toMin(shift.start), eM = toMin(shift.end), lunch = +D.lunchMin || 0, work = D.workDays.includes(dowOf(day.date)) && !ctx.holiday;
   const hoursOf = (a, b) => { const span = Math.max(0, b - a); return Math.max(0, span - (span > 240 ? lunch : 0)); };
@@ -97,6 +97,23 @@ export function calcDay(day, shift, D, ctx = {}) {
   return { ...z, s: "P", h: (reg + ot) / 60, late, ut, ot, pres: 1 };
 }
 
+/** Same as above, then the person's own corrections are applied:
+ *  day.ov  = a status chosen by hand: P present (full day), HD half day, A absent, L on leave (paid), H holiday, R rest day (an empty value = automatic).
+ *  day.man = { late, ut, ot } minutes typed by hand (each one replaces the computed figure). */
+export function calcDay(day, shift, D, ctx = {}) {
+  let c = calcAuto(day, shift, D, ctx); const ov = day.ov;
+  if (ov) {
+    const sM = toMin(shift.start), eM = toMin(shift.end), full = Math.max(0, (eM - sM) - (+D.lunchMin || 0)) / 60, z = { s: ov, h: c.h, late: 0, ut: 0, ot: 0, pres: 0, abs: 0, inc: false };
+    if (ov === "P") c = { ...z, pres: 1, h: c.h || full };
+    else if (ov === "HD") c = { ...z, pres: 0.5, abs: 0.5, h: c.h || full / 2 };
+    else if (ov === "A") c = { ...z, abs: 1, h: 0 };
+    else c = { ...z, h: ov === "L" || ov === "H" || ov === "R" ? 0 : c.h };      // leave, holiday, rest day: nobody is absent
+  }
+  const m = day.man;
+  if (m) { if (m.late !== undefined && m.late !== "") c.late = Math.max(0, +m.late || 0); if (m.ut !== undefined && m.ut !== "") c.ut = Math.max(0, +m.ut || 0); if (m.ot !== undefined && m.ot !== "") c.ot = Math.max(0, +m.ot || 0); }
+  return { ...c, ov: ov || "", man: m || null };
+}
+
 const r2 = (n) => Math.round(n * 100) / 100;
 /** Totals of the days of a DTR (optionally only the days between two dates). */
 export function totalsOf(days, from = "", to = "~") {
@@ -108,5 +125,5 @@ export function totalsOf(days, from = "", to = "~") {
 /** Works out every day of a list again with the current settings. raw: [{ d, in, out }]; leaveDates: Set of "YYYY-MM-DD". */
 export function buildDays(raw, shift, D, leaveDates = new Set()) {
   const hol = new Set((D.holidays || []).map((h) => h.date));
-  return raw.map((r) => { const c = calcDay({ date: r.d, in: r.in, out: r.out }, shift, D, { holiday: hol.has(r.d), leave: leaveDates.has(r.d) }); return { d: r.d, in: r.in || "", out: r.out || "", n: r.n || 0, ...c }; });
+  return raw.map((r) => { const c = calcDay({ date: r.d, in: r.in, out: r.out, ov: r.ov, man: r.man }, shift, D, { holiday: hol.has(r.d), leave: leaveDates.has(r.d) }); return { d: r.d, in: r.in || "", out: r.out || "", n: r.n || 0, ...c }; });
 }

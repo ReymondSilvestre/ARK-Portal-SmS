@@ -1246,11 +1246,11 @@ var REC = {
       return [rSchool(cx, d.schoolId), recSchoolYear(d.createdAt), st.className || '', d.studentId, d.displayName, rDate(d.birthday || st.birthday), d.status === 'suspended' ? 'Suspended' : 'Active', d.hasRealEmail ? d.email : '', rTs(d.createdAt)];
     } },
   payInfo: { grp: 'payroll', src: 'payrollInfo', tab: 'Payroll - Employee pay information', wide: [12],
-    head: ['School', 'Employee No.', 'Employee name', 'Position', 'Department', 'Monthly basic pay', 'Pay frequency', 'Allowances (per month)', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Other deductions / loans', 'Status'],
+    head: ['School', 'Employee No.', 'Employee name', 'Position', 'Department', 'Monthly basic pay', 'Pay frequency', 'Allowances (per month)', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Other deductions / loans', 'Cash advance balance', 'Cash advance deducted every pay', 'Status'],
     row: function (d, id, cx) {
       var al = (d.allowances || []).reduce(function (a, x) { return a + (+x.amount || 0); }, 0);
       return [rSchool(cx, d.schoolId), d.employeeId, d.name, d.position, d.department, rMoney(d.basicMonthly), d.frequency === 'semi' ? 'Twice a month' : 'Monthly', rMoney(al), rYN(d.sss !== false), rYN(d.philhealth !== false), rYN(d.pagibig !== false),
-        (d.deductions || []).map(function (x) { return x.label + ': ' + rMoney(x.amount); }).join('; '), d.active === false ? 'Inactive' : 'Active'];
+        (d.deductions || []).map(function (x) { return (x.type ? x.type + ' ' : '') + x.label + ': ' + rMoney(x.amount) + (x.balance !== undefined && x.balance !== '' && x.balance !== null ? ' (balance ' + rMoney(x.balance) + ')' : ''); }).join('; '), rMoney((d.ca || {}).balance), rMoney((d.ca || {}).perPay), d.active === false ? 'Inactive' : 'Active'];
     } },
   payRuns: { grp: 'payroll', src: 'payrollRuns', tab: 'Payroll - Payroll runs', wide: [],
     head: ['School', 'Payroll period', 'From', 'To', 'Pay date', 'Employees', 'Total gross pay', 'Total deductions', 'Total net pay', 'Status', 'Prepared by'],
@@ -1259,9 +1259,9 @@ var REC = {
     head: ['School', 'Month', 'Employee No.', 'Employee name', 'Days present', 'Days absent', 'Late (minutes)', 'Undertime (minutes)', 'Overtime (hours)', 'Hours worked', 'Days with a missing punch'],
     row: function (d, id, cx) { var t = d.totals || {}; return [rSchool(cx, d.schoolId), d.month, d.employeeId, d.name, t.present, t.absent, t.late, t.ut, Math.round((t.ot || 0) / 6) / 10, t.hours, t.inc]; } },
   paySlips: { grp: 'payroll', src: 'payslips', tab: 'Payroll - Payslips', wide: [],
-    head: ['School', 'Payroll period', 'Employee No.', 'Employee name', 'Position', 'Department', 'Basic pay', 'Allowances', 'Overtime', 'Other earnings', 'Gross pay', 'Absences / late', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding tax', 'Loans / other deductions', 'Total deductions', 'NET PAY', 'Status'],
+    head: ['School', 'Payroll period', 'Employee No.', 'Employee name', 'Position', 'Department', 'Basic pay', 'Allowances', 'Overtime', 'Other earnings', 'Gross pay', 'Absences / late', 'SSS', 'PhilHealth', 'Pag-IBIG', 'Withholding tax', 'Cash advance', 'Cash advance balance after', 'Loans / other deductions', 'Total deductions', 'NET PAY', 'Status'],
     row: function (d, id, cx) {
-      return [rSchool(cx, d.schoolId), d.runLabel, d.employeeId, d.name, d.position, d.department, rMoney(d.basic), rMoney(d.allow), rMoney(d.ot), rMoney(d.otherEarn), rMoney(d.gross), rMoney((+d.absent || 0) + (+d.late || 0)), rMoney(d.sssEe), rMoney(d.phicEe), rMoney(d.hdmfEe), rMoney(d.tax), rMoney(d.other), rMoney(d.totalDed), rMoney(d.net), d.status];
+      return [rSchool(cx, d.schoolId), d.runLabel, d.employeeId, d.name, d.position, d.department, rMoney(d.basic), rMoney(d.allow), rMoney(d.ot), rMoney(d.otherEarn), rMoney(d.gross), rMoney((+d.absent || 0) + (+d.late || 0)), rMoney(d.sssEe), rMoney(d.phicEe), rMoney(d.hdmfEe), rMoney(d.tax), rMoney(d.caDed), rMoney(d.caAfter), rMoney(d.other), rMoney(d.totalDed), rMoney(d.net), d.status];
     } }
 };
 var REC_GROUPS = { registrar: 'Registrar', finance: 'Finance', payroll: 'Finance - Payroll', custodian: 'Custodian', guidance: 'Guidance', hr: 'HR', admin: 'IT Admin' };

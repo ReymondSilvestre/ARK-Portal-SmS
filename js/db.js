@@ -207,23 +207,27 @@ const busy = () => {   // the person is working: never redraw the page under the
   return Date.now() - LIVE.act < 20000;      // touched the keyboard, mouse or screen in the last 20 seconds
 };
 let chip = null;
+/* A small notice in the corner. NOTHING is reloaded by itself: the page only changes when the person presses "Update". */
 function showChip() {
-  if (chip || typeof document === "undefined") return;
+  if (typeof document === "undefined") return;
+  if (chip && !document.body.contains(chip)) chip = null;
+  if (chip) return;
   chip = document.createElement("div"); chip.className = "live-chip noprint"; chip.setAttribute("role", "status");
-  chip.innerHTML = '<span>Another user saved a change.</span> <button type="button" class="btn small primary">Update now</button>';
-  chip.querySelector("button").onclick = () => applyPending(true); document.body.appendChild(chip);
+  chip.innerHTML = '<span>There is a new update.</span> <button type="button" class="btn small primary">Update</button><button type="button" class="live-x" aria-label="Dismiss" title="Not now">&times;</button>';
+  chip.querySelector(".btn").onclick = () => applyPending();
+  chip.querySelector(".live-x").onclick = () => { chip.remove(); chip = null; };   // dismissed: it comes back with the next change
+  document.body.appendChild(chip);
 }
-function applyPending(force) {
-  const todo = LIVE.subs.filter((x) => x.pending); if (!todo.length) { if (chip) { chip.remove(); chip = null; } return; }
-  if (!force && (document.hidden || busy())) return;
-  todo.forEach((x) => { x.pending = false; try { Promise.resolve(x.fn()).catch(() => {}); } catch { } });
+function applyPending() {
+  const todo = LIVE.subs.filter((x) => x.pending);
   if (chip) { chip.remove(); chip = null; }
+  todo.forEach((x) => { x.pending = false; try { Promise.resolve(x.fn()).catch(() => {}); } catch { } });
 }
-/* Pages subscribe with liveRefresh(["list", ...], reloadFunction). When somebody ELSE saves one of those lists the page is updated by itself, but only while you are idle;
-   while you are working a small "Update now" notice appears instead and nothing on your screen moves. */
+/* Pages subscribe with liveRefresh(["list", ...], reloadFunction). Only the pages that SHOW a list somebody else changed are told about it:
+   they get the "There is a new update - Update" notice. The page is never reloaded or redrawn by itself; it reloads that list only when the person presses Update. */
 export function liveRefresh(colls, fn) {
   const sub = { colls: new Set(colls), fn, pending: false };
-  sub.fire = () => { sub.pending = true; if (!document.hidden && busy()) showChip(); };
+  sub.fire = () => { sub.pending = true; showChip(); };
   LIVE.subs.push(sub); startLive(); return () => { LIVE.subs = LIVE.subs.filter((x) => x !== sub); };
 }
 async function pollOnce() {
@@ -244,9 +248,8 @@ export function startLive() {
   if (LIVE.timer || typeof document === "undefined") return;
   LIVE.act = Date.now();
   ["pointerdown", "keydown", "touchstart", "wheel"].forEach((ev) => addEventListener(ev, () => (LIVE.act = Date.now()), { passive: true }));
-  // a tiny check every 20 s (60 s when nobody touched the page for 2 minutes, nothing while the tab is hidden); an update is applied only when you are idle
-  const loop = async () => { await pollOnce(); LIVE.timer = setTimeout(loop, Date.now() - LIVE.act > 120000 ? 60000 : 20000); };
-  setInterval(() => applyPending(false), 5000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollOnce(); applyPending(false); } });
+  // a tiny invisible check every 30 s (60 s when idle, nothing while the tab is hidden); it only decides whether to show the notice
+  const loop = async () => { await pollOnce(); LIVE.timer = setTimeout(loop, Date.now() - LIVE.act > 120000 ? 60000 : 30000); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) pollOnce(); });
   LIVE.timer = setTimeout(loop, 1500);
 }

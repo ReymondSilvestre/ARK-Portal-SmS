@@ -15,3 +15,5 @@
 .ps .net{font-size:14px;font-weight:700;text-align:center;border:2px solid #000;padding:4px;margin:5px 0}
 .ps .sg{display:flex;justify-content:space-between;gap:10px;margin-top:20px;font-size:9px}.ps .sg div{flex:1;border-top:1px solid #000;text-align:center;padding-top:2px}
 .ps small{color:#444;font-size:8.5px}
+.pr-rows .r select{max-width:11rem}.pr-rows .r input:not(.pr-in){flex:1 1 9rem;min-width:7rem}
+.ps .sg{flex-wrap:wrap}.ps .sg div{min-width:22%}

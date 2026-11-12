@@ -14,7 +14,9 @@ export const DEFAULT_SETTINGS = {
   tax: { on: true, brackets: [{ over: 0, rate: 0, base: 0 }, { over: 250000, rate: 15, base: 0 }, { over: 400000, rate: 20, base: 22500 }, { over: 800000, rate: 25, base: 102500 }, { over: 2000000, rate: 30, base: 402500 }, { over: 8000000, rate: 35, base: 2202500 }] },   // yearly taxable income
   dtr: { start: "08:00", end: "17:00", lunchMin: 60, graceMin: 10, otStartMin: 30, otBlockMin: 30, halfDayHrs: 4, workDays: [1, 2, 3, 4, 5], restDayAsOt: true, holidays: [], dateOrder: "MDY" },   // Daily Time Record from the biometric file
   unpaidLeave: true,              // approved "without pay" leave is deducted automatically
-  preparedBy: "", checkedBy: "", approvedBy: "", approvedTitle: "School Head / Principal",
+  period: { firstFrom: 1, firstTo: 15, secondFrom: 16, payFirst: 15, paySecond: 0, payWhole: 0 },   // pay periods and the usual pay day (0 = last day of the month); both can still be changed for every payroll
+  signatories: [{ label: "Prepared by", name: "", position: "Finance Officer" }, { label: "Approved by", name: "", position: "School Head / Principal" }],   // printed under every payslip (the employee's "Received by" is always first)
+  preparedBy: "", checkedBy: "", approvedBy: "", approvedTitle: "School Head / Principal",   // older settings, kept only so saved settings still open
 };
 
 /** Settings saved by the officer, filled in with the defaults for anything missing. */
@@ -25,15 +27,31 @@ export function mergeSettings(saved) {
     else if (s[k] !== undefined && s[k] !== null && s[k] !== "") d[k] = s[k];
   }
   if (s.tax && Array.isArray(s.tax.brackets) && s.tax.brackets.length) d.tax.brackets = s.tax.brackets;
+  if (!Array.isArray(s.signatories) || !s.signatories.length) {          // settings saved before the signatory list existed
+    d.signatories = [{ label: "Prepared by", name: s.preparedBy || "", position: "Finance Officer" }, { label: "Approved by", name: s.approvedBy || "", position: s.approvedTitle || "School Head / Principal" }];
+  }
   return d;
 }
 
-/** The pay period for a month and a half ("first" 1-15, "second" 16-end, "whole"). */
-export function periodOf(month, half) {
-  const [y, m] = month.split("-").map(Number), last = new Date(y, m, 0).getDate(), p = (n) => String(n).padStart(2, "0");
-  const a = half === "second" ? 16 : 1, b = half === "first" ? 15 : last;
-  const label = new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long" }) + " " + y + (half === "whole" ? "" : half === "first" ? " (1st - 15th)" : ` (16th - ${last}th)`);
+/** The pay period for a month and a half ("first", "second", "whole"). P = the pay period rules from the Settings (first day / last day of each half). */
+export function periodOf(month, half, P) {
+  const R = { ...DEFAULT_SETTINGS.period, ...(P || {}) };
+  const [y, m] = month.split("-").map(Number), last = new Date(y, m, 0).getDate(), p = (n) => String(n).padStart(2, "0"), cl = (n) => Math.min(last, Math.max(1, Math.round(+n) || 1));
+  const a = half === "second" ? cl(R.secondFrom) : cl(R.firstFrom), b = half === "first" ? cl(R.firstTo) : last;
+  const mon = new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long" });
+  const label = half === "whole" ? mon + " " + y : `${mon} ${a} - ${b}, ${y}`;
   return { start: `${y}-${p(m)}-${p(a)}`, end: `${y}-${p(m)}-${p(b)}`, label, half };
+}
+/** A period typed by hand (start and end dates), for the half the contributions follow. */
+export function customPeriod(start, end, half) {
+  const f = (d) => new Date(d + "T00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return { start, end, label: `${f(start)} - ${f(end)}`, half };
+}
+/** The usual pay day of a period (rule from the Settings; 0 = last day of the month). */
+export function payDateOf(month, half, P) {
+  const R = { ...DEFAULT_SETTINGS.period, ...(P || {}) }, [y, m] = month.split("-").map(Number), last = new Date(y, m, 0).getDate(), p = (n) => String(n).padStart(2, "0");
+  const d = half === "first" ? R.payFirst : half === "second" ? R.paySecond : R.payWhole;
+  return `${y}-${p(m)}-${p(+d > 0 ? Math.min(last, +d) : last)}`;
 }
 
 /** Monday-Friday days of [a,b] that fall inside the period (both "YYYY-MM-DD"). Used for approved leave without pay. */
@@ -56,6 +74,9 @@ export function monthlyContrib(basicMonthly, info, S) {
   if (info.sss !== false && S.sss.on) { const msc = clamp(Math.floor((basicMonthly + S.sss.step / 2) / S.sss.step) * S.sss.step, S.sss.min, S.sss.max); out.sssEe = r2(msc * S.sss.rate / 100); out.sssEr = r2(msc * S.sss.erRate / 100 + (S.sss.ec || 0)); }
   if (info.philhealth !== false && S.phic.on) { const base = clamp(basicMonthly, S.phic.min, S.phic.max), tot = base * S.phic.rate / 100; out.phicEe = r2(tot * S.phic.employeeShare / 100); out.phicEr = r2(tot - out.phicEe); }
   if (info.pagibig !== false && S.hdmf.on) { const base = Math.min(basicMonthly, S.hdmf.cap); out.hdmfEe = r2(base * S.hdmf.rate / 100); out.hdmfEr = r2(base * S.hdmf.erRate / 100); }
+  // a fixed amount typed under Add information (per month) replaces the automatic employee share
+  const fx = info.fixed || {}, has = (v) => v !== undefined && v !== null && v !== "" && +v >= 0;
+  if (has(fx.sss)) out.sssEe = r2(+fx.sss); if (has(fx.phic)) out.phicEe = r2(+fx.phic); if (has(fx.hdmf)) out.hdmfEe = r2(+fx.hdmf);
   return out;
 }
 
@@ -73,12 +94,25 @@ export function computeSlip(info, inp, S, period) {
   const share = (v) => (!semi ? v : S.contribTiming === "split" ? r2(v / 2) : (S.contribTiming === "first") === (period.half === "first") ? v : 0);   // which pay takes the contribution
   const sssEe = share(mc.sssEe), phicEe = share(mc.phicEe), hdmfEe = share(mc.hdmfEe), sssEr = share(mc.sssEr), phicEr = share(mc.phicEr), hdmfEr = share(mc.hdmfEr);
   let tax = 0;
-  if (info.tax !== false && S.tax.on) {
+  const fx = info.fixed || {}, has = (v) => v !== undefined && v !== null && v !== "" && !isNaN(+v) && +v >= 0;
+  if (has(fx.tax)) tax = r2(+fx.tax / div);
+  else if (info.tax !== false && S.tax.on) {
     const monthlyAllow = (info.allowances || []).reduce((n, a) => n + (a.taxable === false ? 0 : +a.amount || 0), 0);
     const taxableYear = Math.max(0, (monthly + monthlyAllow - mc.sssEe - mc.phicEe - mc.hdmfEe) * 12);
     tax = r2(yearlyTax(taxableYear, S.tax.brackets) / 12 / div);
   }
-  const dedList = (info.deductions || []).map((d) => ({ label: d.label, amount: r2((+d.amount || 0) / div) })), loans = r2(dedList.reduce((n, d) => n + d.amount, 0)), otherDed = r2(+i.otherDed || 0), other = r2(loans + otherDed);
-  const gross = r2(basic + allow + ot + otherEarn), totalDed = r2(absent + late + sssEe + phicEe + hdmfEe + tax + other), net = r2(gross - totalDed);
-  return { basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe, phicEe, hdmfEe, sssEr, phicEr, hdmfEr, tax, other, dedList, otherDed, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0 };
+  // amounts typed by hand for THIS payroll replace the automatic ones (government benefits and tax)
+  const manual = { sss: has(i.mSss), phic: has(i.mPhic), hdmf: has(i.mHdmf), tax: has(i.mTax) };
+  const sssF = manual.sss ? r2(+i.mSss) : sssEe, phicF = manual.phic ? r2(+i.mPhic) : phicEe, hdmfF = manual.hdmf ? r2(+i.mHdmf) : hdmfEe, taxF = manual.tax ? r2(+i.mTax) : tax;
+  // recurring loans / other deductions (per month, shared by the pay periods); a loan with a balance stops when the balance is paid
+  const dedList = (info.deductions || []).map((d) => {
+    let amount = r2((+d.amount || 0) / div); const tracked = d.balance !== undefined && d.balance !== null && d.balance !== "" && !isNaN(+d.balance), bal = tracked ? r2(+d.balance) : null;
+    if (tracked) amount = Math.min(amount, Math.max(0, bal));
+    return { id: d.id || "", type: d.type || "", label: d.label, amount, balanceBefore: bal, balanceAfter: tracked ? r2(Math.max(0, bal - amount)) : null };
+  });
+  const loans = r2(dedList.reduce((n, d) => n + d.amount, 0)), otherDed = r2(+i.otherDed || 0), other = r2(loans + otherDed);
+  // cash advance: the amount taken this pay (never more than the balance) and what is left
+  const caBal = r2(Math.max(0, +(info.ca && info.ca.balance) || 0)), caWant = i.caDed !== undefined && i.caDed !== "" ? +i.caDed || 0 : Math.min(+(info.ca && info.ca.perPay) || 0, caBal), caDed = r2(Math.min(Math.max(0, caWant), caBal)), caAfter = r2(caBal - caDed);
+  const gross = r2(basic + allow + ot + otherEarn), totalDed = r2(absent + late + sssF + phicF + hdmfF + taxF + other + caDed), net = r2(gross - totalDed);
+  return { basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe: sssF, phicEe: phicF, hdmfEe: hdmfF, sssEr, phicEr, hdmfEr, tax: taxF, other, dedList, otherDed, caDed, caBal, caAfter, manual, auto: { sssEe, phicEe, hdmfEe, tax }, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0 };
 }
