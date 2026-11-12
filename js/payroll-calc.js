@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   hoursPerDay: 8,
   otRate: 1.25,                   // overtime = hourly rate x this
   contribTiming: "split",         // semi-monthly: take the contributions half in each pay ("split"), or all in the "first" / "second" pay
+  adminRange: { min: 0, max: 0 },   // salary range of the school administrators (monthly); a pay outside it is flagged, 0 = no limit
   cutoffPair: "B",                // usual cut-off: "A" = 26th-10th and 11th-25th, "B" = 1st-15th and 16th-end (the cut-off can still be chosen for every payroll)
   // Government benefits: mode "fixed" = the same fixed amount a month (employee share / employer share) typed here or per employee under Add information;
   // mode "percent" = the rate below applied to the monthly pay.
@@ -80,7 +81,19 @@ export function cutOfDates(start, end) {
   return "custom";
 }
 /** A per-hour employee (teachers are paid for the hours they teach, not a fixed daily pay). Saved choice first; without one, a position with teacher / instructor / professor is per hour. */
-export const isHourly = (info) => info && (info.payType === "hourly" || ((info.payType === undefined || info.payType === "") && /teacher|instructor|professor|faculty/i.test(info.position || "")));
+export const CATEGORIES = [{ key: "staff", label: "Employee staff", short: "Staff" }, { key: "teacher", label: "Teachers (paid per hour)", short: "Teachers" }, { key: "admin", label: "School administrators", short: "Administrators" }];
+const TEACHER_RX = /teacher|instructor|professor|faculty/i, ADMIN_RX = /principal|school head|head of school|director|administrator|president|dean|superintendent|supervisor|coordinator/i;
+/** The payroll group of an employee: staff, teacher (paid per hour) or admin (school administrators). The saved choice first; without one it follows the position. */
+export function categoryOf(info) {
+  if (!info) return "staff";
+  if (info.category === "staff" || info.category === "teacher" || info.category === "admin") return info.category;
+  const pos = info.position || "";
+  if (info.payType === "hourly") return "teacher";
+  if (info.payType === "monthly") return ADMIN_RX.test(pos) ? "admin" : "staff";
+  return TEACHER_RX.test(pos) ? "teacher" : ADMIN_RX.test(pos) ? "admin" : "staff";
+}
+/** A per-hour employee: teachers are paid for the hours they teach, not a fixed daily pay. */
+export const isHourly = (info) => categoryOf(info) === "teacher";
 
 /** The usual pay day of a period (rule from the Settings; 0 = last day of the month). */
 export function payDateOf(month, half, P) {
@@ -122,8 +135,9 @@ export function computeSlip(info, inp, S, period) {
   const perHour = !!isHourly(info), rate = perHour ? +info.hourlyRate || 0 : 0, hours = perHour ? r2(+i.hoursWorked || 0) : 0;
   // per-hour employee (teacher): pay = hours worked x rate for THIS period; no absence / late deduction (only the hours worked are paid).
   // fixed-pay employee: monthly pay (half of it in a twice-a-month payroll) less absences and late.
-  const basic = perHour ? r2(hours * rate) : r2((+info.basicMonthly || 0) / div);
-  const monthly = perHour ? r2(basic * div) : +info.basicMonthly || 0;      // the monthly equivalent (used by the percent rates and the tax estimate)
+  const mB = !perHour && i.mBasic !== undefined && i.mBasic !== null && i.mBasic !== "" && !isNaN(+i.mBasic);      // pay of this period typed by hand (administrators)
+  const basic = perHour ? r2(hours * rate) : mB ? r2(+i.mBasic) : r2((+info.basicMonthly || 0) / div);
+  const monthly = perHour || mB ? r2(basic * div) : +info.basicMonthly || 0;      // the monthly equivalent (used by the percent rates and the tax estimate)
   const daily = monthly / S.workDays, hourly = perHour ? rate : daily / S.hoursPerDay;
   const absentDays = perHour ? 0 : (+i.absentDays || 0) + (+i.leaveDays || 0);
   const allowList = (info.allowances || []).map((a) => ({ label: a.label, amount: r2((+a.amount || 0) / div) })), allow = r2(allowList.reduce((n, a) => n + a.amount, 0));
@@ -141,7 +155,7 @@ export function computeSlip(info, inp, S, period) {
     tax = r2(yearlyTax(taxableYear, S.tax.brackets) / 12 / div);
   }
   // amounts typed by hand for THIS payroll replace the automatic ones (government benefits and tax)
-  const manual = { sss: has(i.mSss), phic: has(i.mPhic), hdmf: has(i.mHdmf), tax: has(i.mTax) };
+  const manual = { basic: mB, sss: has(i.mSss), phic: has(i.mPhic), hdmf: has(i.mHdmf), tax: has(i.mTax) };
   const sssF = manual.sss ? r2(+i.mSss) : sssEe, phicF = manual.phic ? r2(+i.mPhic) : phicEe, hdmfF = manual.hdmf ? r2(+i.mHdmf) : hdmfEe, taxF = manual.tax ? r2(+i.mTax) : tax;
   // recurring loans / other deductions (per month, shared by the pay periods); a loan with a balance stops when the balance is paid
   const dedList = (info.deductions || []).map((d) => {
@@ -153,5 +167,5 @@ export function computeSlip(info, inp, S, period) {
   // cash advance: the amount taken this pay (never more than the balance) and what is left
   const caBal = r2(Math.max(0, +(info.ca && info.ca.balance) || 0)), caWant = i.caDed !== undefined && i.caDed !== "" ? +i.caDed || 0 : Math.min(+(info.ca && info.ca.perPay) || 0, caBal), caDed = r2(Math.min(Math.max(0, caWant), caBal)), caAfter = r2(caBal - caDed);
   const gross = r2(basic + allow + ot + otherEarn), totalDed = r2(absent + late + sssF + phicF + hdmfF + taxF + other + caDed), net = r2(gross - totalDed);
-  return { perHour, rate, hours, basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe: sssF, phicEe: phicF, hdmfEe: hdmfF, sssEr, phicEr, hdmfEr, tax: taxF, other, dedList, otherDed, caDed, caBal, caAfter, manual, auto: { sssEe, phicEe, hdmfEe, tax }, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0 };
+  return { cat: categoryOf(info), perHour, rate, hours, basic, allow, allowList, ot, otherEarn, gross, absent, late, sssEe: sssF, phicEe: phicF, hdmfEe: hdmfF, sssEr, phicEr, hdmfEr, tax: taxF, other, dedList, otherDed, caDed, caBal, caAfter, manual, auto: { sssEe, phicEe, hdmfEe, tax }, totalDed, net, absentDays, leaveDays: +i.leaveDays || 0 };
 }

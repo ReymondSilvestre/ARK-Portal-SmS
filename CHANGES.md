@@ -1,5 +1,15 @@
 # Revision notes
 
+## NEW (update 10): payroll in three separate groups
+**To apply:** upload the site folder to GitHub again (changed: `js/payroll.js`, `js/payroll-calc.js`). No `Code.gs` change.
+
+* **Three payroll groups:** *Employee staff* (fixed monthly pay), *Teachers* (per hour) and *School administrators*. The group is chosen per employee under **Add information > Details > Payroll group** (without a choice it follows the position: teacher / instructor / professor / faculty = Teachers; principal, school head, director, administrator, dean ... = Administrators; everyone else = Staff).
+* **Add information** now shows one list per group, each with its pay (monthly pay or rate per hour), allowances, **cash advance balance** and which benefits apply. The administrators list shows the salary range and flags a pay outside it.
+* **Payroll > Payroll for:** *Everyone* (three tables, each with its own totals, and a grand total) or **one group only** (its own payroll, saved and finalized separately; the saved payroll is named e.g. "Nov 1 - 15, 2026 - Teachers"). The same cut-off can have one payroll per group.
+* **Administrators:** the pay of each cut-off can be typed by hand in the payroll (blue = typed; clear it to return to the monthly pay); government benefits and cash advance / balance work as for everyone. **Settings > Administrators salary range** sets the lowest and highest monthly pay (0 = no limit).
+
+---
+
 ## NEW (update 9): show / hide sections on every page, payroll cut-offs, teachers paid per hour, government benefits as fixed amounts
 **To apply:** upload the whole site folder to GitHub again (new file: `js/collapse.js`; changed: `css/style.css`, `js/payroll.js`, `js/payroll-calc.js` and every page's `.html`). `apps-script/Code.gs` only got extra columns in the readable Payroll sheets (Pay type, Rate per hour, Hours worked): paste it, publish a New version of the deployment and run menu **ARK Portal > 5. Refresh the readable sheets**. No new tabs.
 
