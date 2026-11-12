@@ -547,12 +547,13 @@ function printWindow(bodyHtml, title, landscape = true) {
   const base = new URL("css/style.css", location.href).href, css = new URL("css/payroll.css", location.href).href;
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><link rel="stylesheet" href="${base}"><link rel="stylesheet" href="${css}"><style>@page{size:A4 ${landscape ? "landscape" : "portrait"};margin:6mm}body{background:#fff;margin:0}
     .pg{display:flex;page-break-after:always;height:${landscape ? "196mm" : "280mm"};overflow:hidden}.pg:last-child{page-break-after:auto}.half{flex:1 1 50%;width:50%;padding:0 5mm;box-sizing:border-box}.half+.half{border-left:1.5px dashed #777}
-    .ps th,.ps .tot td,.ps .net{-webkit-print-color-adjust:exact;print-color-adjust:exact}table{font-size:9px}</style></head><body>${bodyHtml}<script>addEventListener("load",function(){setTimeout(function(){focus();print()},300)})<\/script></body></html>`);
+    ${landscape ? "" : ".pg{flex-direction:column}.half{flex:0 0 50%;width:100%;height:50%;padding:2mm 6mm 0;overflow:hidden}.half+.half{border-left:0;border-top:1.5px dashed #777}.ps{font-size:9px}.ps td,.ps th{padding:1px 4px}.ps h1{font-size:11px;margin:1px 0}.ps .hd{padding-bottom:2px;margin-bottom:2px}.ps .hd img{width:30px;height:30px}.ps .net{font-size:12px;padding:2px;margin:3px 0}.ps .sg{margin-top:12px}.ps p{margin:2px 0}.ps table{margin-top:2px!important}"}
+    .ps th,.ps .tot td,.ps .net{-webkit-print-color-adjust:exact;print-color-adjust:exact}table{font-size:9px}</style></head><body>${bodyHtml}<script>addEventListener("load",function(){${landscape ? "" : "document.querySelectorAll('.half').forEach(function(h){var p=h.firstElementChild;if(!p)return;var a=h.clientHeight-6,b=p.scrollHeight;if(b>a)p.style.zoom=(a/b).toFixed(3)});"}setTimeout(function(){focus();print()},300)})<\/script></body></html>`);
   w.document.close();
 }
 function printSlips(slips) {
   if (!slips.length) return flash("There is no payslip to print.");
-  printWindow(slips.map((s) => `<div class="pg"><div class="half">${slipHtml(s, "EMPLOYEE COPY")}</div><div class="half">${slipHtml(s, "PAYROLL OFFICE COPY")}</div></div>`).join(""), "Payslips");
+  printWindow(slips.map((s) => `<div class="pg"><div class="half">${slipHtml(s, "EMPLOYEE COPY")}</div><div class="half">${slipHtml(s, "PAYROLL OFFICE COPY")}</div></div>`).join(""), "Payslips", false);
 }
 const runSelect = (id, val) => `<label>Payroll<select id="${id}"><option value="">- choose -</option>${S.runs.map((r) => `<option value="${esc(r.id)}"${r.id === val ? " selected" : ""}>${esc(r.label)} (${esc(r.status)})</option>`).join("")}</select></label>`;
 async function rSlips() {
