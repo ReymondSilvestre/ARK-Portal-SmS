@@ -7,7 +7,7 @@ export const DEFAULT_SETTINGS = {
   workDays: 22,                   // working days in a month: daily rate = monthly pay / workDays
   hoursPerDay: 8,
   otRate: 1.25,                   // overtime = hourly rate x this
-  contribTiming: "split",         // semi-monthly: take the contributions half in each pay ("split"), or all in the "first" / "second" pay
+  contribTiming: "split",         // older single setting, now only the fallback: each benefit (sss / phic / hdmf) has its own `when`: "split" = half in each cut-off, "first" / "second" = all in that cut-off
   adminRange: { min: 0, max: 0 },   // salary range of the school admins (monthly); a pay outside it is flagged, 0 = no limit
   cutoffPair: "B",                // usual cut-off: "A" = 26th-10th and 11th-25th, "B" = 1st-15th and 16th-end (the cut-off can still be chosen for every payroll)
   // Government benefits: mode "fixed" = the same fixed amount a month (employee share / employer share) typed here or per employee under Add information;
@@ -144,8 +144,8 @@ export function computeSlip(info, inp, S, period) {
   const ot = r2((+i.otHours || 0) * hourly * S.otRate), otherEarn = r2(+i.otherEarn || 0);
   const absent = perHour ? 0 : r2(absentDays * daily), late = perHour ? 0 : r2(((+i.lateMin || 0) / 60) * hourly);
   const mc = monthlyContrib(monthly, info, S);
-  const share = (v) => (!semi ? v : S.contribTiming === "split" ? r2(v / 2) : (S.contribTiming === "first") === (period.half === "first") ? v : 0);   // which pay takes the contribution
-  const sssEe = share(mc.sssEe), phicEe = share(mc.phicEe), hdmfEe = share(mc.hdmfEe), sssEr = share(mc.sssEr), phicEr = share(mc.phicEr), hdmfEr = share(mc.hdmfEr);
+  const share = (v, when) => { const t = when || S.contribTiming; return !semi ? v : t === "split" ? r2(v / 2) : (t === "first") === (period.half === "first") ? v : 0; };   // which cut-off takes the contribution (chosen per benefit under Settings)
+  const sssEe = share(mc.sssEe, S.sss.when), phicEe = share(mc.phicEe, S.phic.when), hdmfEe = share(mc.hdmfEe, S.hdmf.when), sssEr = share(mc.sssEr, S.sss.when), phicEr = share(mc.phicEr, S.phic.when), hdmfEr = share(mc.hdmfEr, S.hdmf.when);
   let tax = 0;
   const fx = info.fixed || {}, has = (v) => v !== undefined && v !== null && v !== "" && !isNaN(+v) && +v >= 0;
   if (has(fx.tax)) tax = r2(+fx.tax / div);

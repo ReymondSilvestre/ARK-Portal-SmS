@@ -1,5 +1,13 @@
 # Revision notes
 
+## NEW (update 12): Payroll > Settings > Government benefits: choose the cut-off of each benefit
+**To apply:** upload the site folder to GitHub again (changed: `js/payroll.js`, `js/payroll-calc.js`). No `Code.gs` change.
+
+* **SSS, PhilHealth and Pag-IBIG each have *Deducted in which cut-off?*:** *Half in each cut-off*, *1st cut-off only* (1st - 15th or 26th - 10th) or *2nd cut-off only* (16th - end or 11th - 25th). Each benefit is set separately (for example SSS in the 1st, PhilHealth in the 2nd, Pag-IBIG half in each); it applies to the employee and employer share.
+* This replaces the single *Contributions are taken* box under Settings > Pay. Settings saved before keep their old choice for all three until you change them.
+
+---
+
 ## NEW (update 11): School Admin account (view only), "School admins" wording in Payroll
 **To apply:** paste the new `apps-script/Code.gs`, publish a **New version** of the deployment (Deploy > Manage deployments > pencil > New version > Deploy), and upload the whole site folder to GitHub again.
 New: `schooladmin.html`, `js/schooladmin.js`, `js/viewonly.js`. Changed: `Code.gs`, `css/style.css`, `js/auth.js`, `js/db.js`, `js/admin.js`, `js/leave.js`, `js/employee-fields.js`, `js/payroll.js`, `js/payroll-calc.js`, `js/registrar.js`, `js/finance.js`, `js/hr.js`, `js/records-app.js`, `admin.html`, `change-password.html`, `registrar.html`, `finance.html`, `hr.html`, `payroll.html`, `custodian.html`, `guidance.html`. No new sheet tabs.
