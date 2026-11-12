@@ -110,9 +110,20 @@ $("pInfo").addEventListener("click", (ev) => run(async () => {
     await setDoc(doc(db, "payrollInfo", f.employeeKey), patch, { merge: true }); S.form = null; await refresh(); flash("Pay information saved.", true);
   }
 }));
-$("pInfo").addEventListener("change", (ev) => run(async () => {
-  const t = ev.target; if (!t.dataset.quick) return; const v = r2(+t.value); if (!(v >= 0)) return flash("Enter a valid amount.");
-  await setDoc(doc(db, "payrollInfo", t.dataset.quick), { basicMonthly: v, updatedAt: serverTimestamp() }, { merge: true }); const i = S.info.get(t.dataset.quick); if (i) i.basicMonthly = v; flash("Saved.", true);
+S.pendingPay = {};
+$("pInfo").addEventListener("input", (ev) => {        // typing a pay only marks it; nothing is saved until the Save button is pressed
+  const t = ev.target; if (!t.dataset.quick) return; S.pendingPay[t.dataset.quick] = t.value; t.style.background = "#fff4e5";
+  let bar = $("payBar"); if (!bar) { bar = document.createElement("div"); bar.id = "payBar"; bar.className = "btnbar"; bar.innerHTML = '<button class="btn primary" id="paySave" type="button"></button><button class="btn" id="payUndo" type="button">Cancel changes</button>'; $("pInfo").querySelector(".tablewrap").before(bar); }
+  $("paySave").textContent = `Save ${Object.keys(S.pendingPay).length} changed pay amount(s)`;
+});
+$("pInfo").addEventListener("click", (ev) => run(async () => {
+  const t = ev.target.closest("button"); if (!t) return;
+  if (t.id === "payUndo") { S.pendingPay = {}; return rInfo(); }
+  if (t.id === "paySave") {
+    const ids = Object.keys(S.pendingPay), b = writeBatch(db);
+    for (const id of ids) { const v = r2(+S.pendingPay[id]); if (!(v >= 0)) return flash("One of the pay amounts is not valid."); b.set(doc(db, "payrollInfo", id), { basicMonthly: v, updatedAt: serverTimestamp() }, { merge: true }); }
+    await b.commit(); S.pendingPay = {}; await refresh(); flash("Pay amounts saved.", true);
+  }
 }));
 
 /* ---------- biometric upload -> DTR ---------- */
@@ -418,4 +429,4 @@ function rSettings() {
 }
 
 await refresh(); show("dash");
-liveRefresh(["employees", "payrollInfo", "payrollRuns", "payrollSettings", "leaveRequests", "payrollDtr"], () => { S.dtr = {}; return S.draft || S.form || S.up || S.dtrView ? null : refresh(); });   // not while a payroll or a form is open
+liveRefresh(["employees", "payrollInfo", "payrollRuns", "payrollSettings", "leaveRequests", "payrollDtr"], () => { S.dtr = {}; return S.draft || S.form || S.up || S.dtrView || Object.keys(S.pendingPay || {}).length ? null : refresh(); });   // not while a payroll or a form is open

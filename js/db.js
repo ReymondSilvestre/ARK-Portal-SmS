@@ -199,15 +199,31 @@ export function writeBatch() {
    Pages subscribe with liveRefresh(["employees", ...], reloadFunction). Your own saves do not trigger a reload (the server tells us their number). */
 const LIVE = { vers: null, subs: [], timer: null, running: false, fast: 0 };
 function absorbVersions(v) { if (LIVE.vers) Object.assign(LIVE.vers, v); }
-const typing = () => {
+const busy = () => {   // the person is working: never redraw the page under their hands
   if (typeof document === "undefined") return false;
-  const a = document.activeElement; if (a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "file", "range"].includes(a.type)))) return true;
-  return !!document.querySelector("dialog[open], .lv-pop, .ab-veil:not([hidden])");
+  const a = document.activeElement;
+  if (a && (a.tagName === "TEXTAREA" || a.tagName === "SELECT" || (a.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "file", "range"].includes(a.type)))) return true;
+  if (document.querySelector("dialog[open], .lv-pop, .ab-veil:not([hidden])")) return true;
+  return Date.now() - LIVE.act < 20000;      // touched the keyboard, mouse or screen in the last 20 seconds
 };
+let chip = null;
+function showChip() {
+  if (chip || typeof document === "undefined") return;
+  chip = document.createElement("div"); chip.className = "live-chip noprint"; chip.setAttribute("role", "status");
+  chip.innerHTML = '<span>Another user saved a change.</span> <button type="button" class="btn small primary">Update now</button>';
+  chip.querySelector("button").onclick = () => applyPending(true); document.body.appendChild(chip);
+}
+function applyPending(force) {
+  const todo = LIVE.subs.filter((x) => x.pending); if (!todo.length) { if (chip) { chip.remove(); chip = null; } return; }
+  if (!force && (document.hidden || busy())) return;
+  todo.forEach((x) => { x.pending = false; try { Promise.resolve(x.fn()).catch(() => {}); } catch { } });
+  if (chip) { chip.remove(); chip = null; }
+}
+/* Pages subscribe with liveRefresh(["list", ...], reloadFunction). When somebody ELSE saves one of those lists the page is updated by itself, but only while you are idle;
+   while you are working a small "Update now" notice appears instead and nothing on your screen moves. */
 export function liveRefresh(colls, fn) {
-  const sub = { colls: new Set(colls), fn, pending: false, t: null };
-  const run = () => { if (document.hidden) { sub.pending = true; return; } if (typing()) { clearTimeout(sub.t); sub.t = setTimeout(run, 3000); return; } sub.pending = false; try { Promise.resolve(fn()).catch(() => {}); } catch { } };
-  sub.fire = () => { clearTimeout(sub.t); sub.t = setTimeout(run, 500); }; sub.run = run;
+  const sub = { colls: new Set(colls), fn, pending: false };
+  sub.fire = () => { sub.pending = true; if (!document.hidden && busy()) showChip(); };
   LIVE.subs.push(sub); startLive(); return () => { LIVE.subs = LIVE.subs.filter((x) => x !== sub); };
 }
 async function pollOnce() {
@@ -227,9 +243,10 @@ async function pollOnce() {
 export function startLive() {
   if (LIVE.timer || typeof document === "undefined") return;
   LIVE.act = Date.now();
-  ["pointerdown", "keydown", "touchstart"].forEach((ev) => addEventListener(ev, () => (LIVE.act = Date.now()), { passive: true }));
-  // every 15 s while somebody is using the page, every 45 s when nobody touched it for 2 minutes, nothing while the tab is hidden (keeps the server load small)
-  const loop = async () => { await pollOnce(); LIVE.timer = setTimeout(loop, Date.now() - LIVE.act > 120000 ? 45000 : 15000); };
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { LIVE.act = Date.now(); pollOnce(); LIVE.subs.forEach((x) => x.pending && x.fire()); } });
+  ["pointerdown", "keydown", "touchstart", "wheel"].forEach((ev) => addEventListener(ev, () => (LIVE.act = Date.now()), { passive: true }));
+  // a tiny check every 20 s (60 s when nobody touched the page for 2 minutes, nothing while the tab is hidden); an update is applied only when you are idle
+  const loop = async () => { await pollOnce(); LIVE.timer = setTimeout(loop, Date.now() - LIVE.act > 120000 ? 60000 : 20000); };
+  setInterval(() => applyPending(false), 5000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { pollOnce(); applyPending(false); } });
   LIVE.timer = setTimeout(loop, 1500);
 }

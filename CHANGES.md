@@ -1,5 +1,13 @@
 # Revision notes
 
+## CHANGED (update 7): no more disturbing refresh
+* The page is **never redrawn while you are working**. When another user saves a change, your page is updated by itself only after you have been idle for 20 seconds (no typing, clicking or touching) and nothing is open; otherwise a small notice **"Another user saved a change - Update now"** appears in the corner and nothing on your screen moves. The check is a tiny request every 20 seconds (60 s when idle, none while the tab is hidden).
+* **Payroll > Add information:** typing a monthly pay no longer saves by itself; press **Save changed pay amounts**.
+* Nothing in the system saves on a timer; every save is a button you press.
+
+---
+
+
 ## NEW (update 6): Biometric upload -> automatic DTR -> payroll
 **To apply:** paste the new `apps-script/Code.gs` (new tab `payrollDtr`), publish a New version of the deployment, upload the folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets** (adds the *Payroll - DTR summary (biometric)* tab).
 
