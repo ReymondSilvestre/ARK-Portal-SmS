@@ -1,5 +1,15 @@
 # Revision notes
 
+## NEW (update 15): minimum wage 645 for every employee (adjustable), selection menu instead of Hide / Show buttons
+**To apply:** upload the whole site folder to GitHub again (no `Code.gs` change, no new sheet tabs). Changed: `js/payroll.js`, `js/payroll-calc.js`, `css/payroll.css`, `css/style.css`, every page (`*.html`: the Hide / Show script is no longer loaded). Removed: `js/collapse.js`.
+
+* **Payroll > Settings > Minimum wage (new):** **Minimum wage per day = PHP 645** (default) with an **Apply the minimum wage** switch. Change the amount here when the minimum wage changes.
+* Every employee is paid **at least** this daily rate: records with no rate or a lower rate are paid at the minimum wage in the payroll, the payslip and the dashboard; new pay records start at it; Add information (form and quick edit) refuses a daily rate below it. Teachers (per hour) get at least the minimum wage / hours a day per hour.
+* **Apply to all employees now:** one button sets everyone below the minimum wage to it (creates missing pay records). Employees above it are not lowered.
+* **No more Hide / Show buttons.** Settings now has a **Settings section** selection menu (grouped: Pay and wages, Government benefits and tax, Attendance and holidays, Payslip, or All sections). All settings are still saved together with **Save settings**.
+
+---
+
 ## NEW (update 14): payslip shows SSS / PhilHealth / Pag-IBIG / TIN numbers and the number of holidays; Settings > Payment of holidays
 **To apply:** paste the new `apps-script/Code.gs` (two more readable Payslip columns), publish a **New version** of the deployment, upload the whole site folder to GitHub again, then run menu **ARK Portal > 5. Refresh the readable sheets**. Changed: `js/payroll.js`, `js/payroll-calc.js`, `apps-script/Code.gs`. No new sheet tabs.
 
